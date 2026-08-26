@@ -100,3 +100,37 @@ body {
   cursor: pointer;
   font-weight: bold;
 }
+
+/* Animated Pastel Gradient Background */
+.main-background-wrapper {
+  position: relative;
+  min-height: 100vh;
+  width: 100vw;
+  overflow-x: hidden;
+  background: linear-gradient(-45deg, #0f172a, #1e1b4b, #2e1065, #311042);
+  background-size: 400% 400%;
+  animation: gradientAnimation 15s ease infinite;
+}
+
+@keyframes gradientAnimation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Background Canvas Layer */
+.bg-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* User clicks-ah disrupt pannaadhu */
+  z-index: 1;
+}
+
+/* App Content Container (Foreground) */
+.bg-content {
+  position: relative;
+  z-index: 2;
+}
