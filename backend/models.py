@@ -45,7 +45,7 @@ class Contribution(Base):
     id = Column(Integer, primary_key=True, index=True)
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    type = Column(String(50), nullable=False) # 'text', 'photo', 'video', 'audio', 'memory', 'letter'
+    type = Column(String(50), nullable=True) # 'text', 'photo', 'video', 'audio', 'memory', 'letter'
     content = Column(Text, nullable=True) # Text message or letter content
     media_url = Column(String(255), nullable=True) # Image/Audio/Video file path
     caption = Column(String(255), nullable=True)
