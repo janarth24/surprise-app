@@ -1,100 +1,175 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import API from '../services/api';
 
 export default function RoomDetails({ currentUser }) {
   const { roomCode } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Active Contribution Tab State
+  const roomId = location.state?.roomId;
+
   const [activeTab, setActiveTab] = useState('text');
-  
-  // Modals / Form State
-  const [showFormModal, setShowFormModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Tab Details Configuration
+  // Form & Modal States
+  const [content, setContent] = useState('');
+  const [caption, setCaption] = useState('');
+  const [file, setFile] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editingItem, setEditingItem] = useState(null); // Edit mode check
+
   const tabs = [
-    { id: 'text', label: '💬 Text Wishes', icon: '📝' },
-    { id: 'photo', label: '🖼️ Photos', icon: '📸' },
-    { id: 'video', label: '🎥 Videos', icon: '🎬' },
-    { id: 'audio', label: '🎙️ Audio Notes', icon: '🎵' },
-    { id: 'memory', label: '🌟 Memories', icon: '💭' },
-    { id: 'letter', label: '✉️ Secret Letter', icon: '💌' },
+    { id: 'text', label: '💬 Text Wishes' },
+    { id: 'photo', label: '🖼️ Photos' },
+    { id: 'video', label: '🎥 Videos' },
+    { id: 'audio', label: '🎙️ Audio Notes' },
+    { id: 'memory', label: '🌟 Memories' },
+    { id: 'letter', label: '✉️ Secret Letter' },
   ];
 
-  const handleOpenAddForm = () => {
-    setEditingItem(null);
-    setShowFormModal(true);
+// Fetch items for specific logged-in user only
+const fetchContributions = async () => {
+  if (!roomId || !currentUser?.id) return;
+  try {
+    setLoading(true);
+    // API URL-la currentUser.id add panniyachi
+    const res = await API.get(`/contributions/${roomId}/${currentUser.id}/${activeTab}`);
+    if (res.data.status === 'success') {
+      setItems(res.data.data);
+    }
+  } catch (err) {
+    console.error('Fetch Error:', err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  useEffect(() => {
+    fetchContributions();
+  }, [roomId, activeTab]);
+
+  // Open Edit Modal
+  const handleEditClick = (item) => {
+    setEditingItem(item);
+    setContent(item.content || '');
+    setCaption(item.caption || '');
+    setFile(null);
+    setShowModal(true);
   };
 
-  const handleOpenEditForm = (item) => {
-    setEditingItem(item);
-    setShowFormModal(true);
+  // Close Modal Reset
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingItem(null);
+    setContent('');
+    setCaption('');
+    setFile(null);
   };
+
+const handleDelete = async (itemId) => {
+  // Check if user object has ID
+  const userId = currentUser?.id || currentUser?.user_id;
+
+  if (!userId) {
+    alert("User ID missing! Please re-login.");
+    return;
+  }
+
+  if (window.confirm('Are you sure you want to delete this?')) {
+    try {
+      // Direct URL parameter concatenation (No ? query mark needed)
+      await API.delete(`/contributions/delete/${itemId}/${userId}`);
+      
+      // Refresh list
+      fetchContributions();
+    } catch (err) {
+      console.error("Delete Error:", err);
+      alert(err.response?.data?.detail || 'Delete failed!');
+    }
+  }
+};
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  const formData = new FormData();
+  
+  // 🔴 INDHA LINE MUST: user_id explicit-a add pannanum
+  formData.append('user_id', currentUser.id);
+
+  if (content) formData.append('content', content);
+  if (caption) formData.append('caption', caption);
+  if (file) formData.append('file', file);
+
+  try {
+    if (editingItem) {
+      // EDIT CALL
+      await API.put(`/contributions/update/${editingItem.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    } else {
+      // ADD CALL
+      formData.append('room_id', roomId);
+      formData.append('type', activeTab);
+      
+      await API.post('/contributions/add', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    }
+
+    handleCloseModal();
+    fetchContributions();
+  } catch (err) {
+    console.error('Submit Error:', err);
+    alert('Operation failed!');
+  }
+};
 
   return (
-    <div className="dashboard-wrapper">
+    <div style={{ minHeight: '100vh', background: '#0b0f12', color: '#fff' }}>
       
-      {/* 1. ROOM HEADER NAVBAR */}
-      <nav className="dashboard-navbar">
+      {/* NAVBAR */}
+      <nav style={{ display: 'flex', justifyContent: 'space-between', padding: '15px 5%', background: '#121619' }}>
+        <button onClick={() => navigate('/dashboard')} style={{ padding: '6px 14px', background: '#333', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+          ← Back
+        </button>
+        <h2 style={{ color: '#f5b041', margin: 0 }}>ROOM: {roomCode}</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <button 
-            className="btn-secondary-dark" 
-            onClick={() => navigate('/dashboard')}
-            style={{ padding: '6px 14px', fontSize: '0.85rem' }}
-          >
-            ← Back to Dashboard
-          </button>
-          <div className="nav-logo">
-            <h2>ROOM: <span>{roomCode}</span></h2>
-          </div>
-        </div>
+    
+    {/* 👥 ATTRACTIVE PARTICIPANTS REDIRECT BUTTON */}
+    <button 
+      onClick={() => navigate(`/room/${roomCode}/participants`, { state: { roomId, roomCode } })}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '8px 18px',
+        background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '20px',
+        fontWeight: 'bold',
+        fontSize: '0.85rem',
+        cursor: 'pointer',
+        boxShadow: '0 4px 15px rgba(168, 85, 247, 0.4)',
+        transition: 'transform 0.2s ease, boxShadow 0.2s ease'
+      }}
+      onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+      onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+    >
+      <span>👥</span>
+      <span>View Participants</span>
+    </button>
 
-        <div className="nav-links">
-          <span className="user-badge">👤 {currentUser?.name || 'User'}</span>
-        </div>
+    <span style={{ fontSize: '0.9rem', color: '#aaa' }}>👤 {currentUser?.name}</span>
+  </div>
+        <span>👤 {currentUser?.name}</span>
       </nav>
 
-      {/* 2. ROOM BANNER */}
-      <section style={{
-        padding: '30px 8%',
-        background: 'rgba(255, 255, 255, 0.02)',
-        borderBottom: '1px solid var(--border-glass)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '20px'
-      }}>
-        <div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--accent-gold)', fontWeight: 'bold', letterSpacing: '2px' }}>
-            SURPRISE EVENT
-          </span>
-          <h1 style={{ margin: '5px 0 8px 0', fontSize: '2rem' }}>Rahul's 25th Birthday Blast</h1>
-          <p style={{ margin: 0, color: 'var(--text-sub)', fontSize: '0.9rem' }}>
-            Target Person: <strong style={{ color: '#fff' }}>Rahul</strong> | Date: <strong>2026-10-15</strong>
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn-outline" style={{ fontSize: '0.85rem', padding: '10px 20px' }} onClick={() => navigator.clipboard.writeText(roomCode)}>
-            📋 Copy Code: {roomCode}
-          </button>
-          <button className="btn-gold" style={{ fontSize: '0.85rem', padding: '10px 24px' }} onClick={handleOpenAddForm}>
-            + Add {activeTab.toUpperCase()}
-          </button>
-        </div>
-      </section>
-
-      {/* 3. CATEGORY TABS */}
-      <div style={{
-        display: 'flex',
-        gap: '10px',
-        padding: '20px 8%',
-        overflowX: 'auto',
-        borderBottom: '1px solid var(--border-glass)',
-        background: 'rgba(0, 0, 0, 0.2)'
-      }}>
+      {/* DYNAMIC TABS */}
+      <div style={{ display: 'flex', gap: '10px', padding: '20px 5%', overflowX: 'auto' }}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -102,13 +177,11 @@ export default function RoomDetails({ currentUser }) {
             style={{
               padding: '10px 20px',
               borderRadius: '25px',
-              border: activeTab === tab.id ? '1px solid var(--accent-gold)' : '1px solid var(--border-glass)',
-              background: activeTab === tab.id ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.04)',
-              color: activeTab === tab.id ? '#121619' : 'var(--text-main)',
-              fontWeight: activeTab === tab.id ? 'bold' : '500',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: '0.3s'
+              border: 'none',
+              background: activeTab === tab.id ? '#f5b041' : '#1e252b',
+              color: activeTab === tab.id ? '#000' : '#fff',
+              fontWeight: 'bold',
+              cursor: 'pointer'
             }}
           >
             {tab.label}
@@ -116,171 +189,116 @@ export default function RoomDetails({ currentUser }) {
         ))}
       </div>
 
-      {/* 4. CONTENT GRID & PREVIEW AREA */}
-      <main className="dashboard-content" style={{ marginTop: '30px' }}>
-        
-        <div className="section-header">
-          <h3>{tabs.find(t => t.id === activeTab)?.label} Contributions</h3>
-          <span className="count-badge">0 Items</span>
-        </div>
-
-        {/* SAMPLE DUMMY GRID FOR LAYOUT VISUALIZATION */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '20px',
-          marginTop: '20px'
-        }}>
-          
-          {/* Add New Quick Card Slot */}
-          <div 
-            onClick={handleOpenAddForm}
-            style={{
-              border: '2px dashed var(--border-glass)',
-              borderRadius: '12px',
-              padding: '40px 20px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              transition: '0.3s',
-              background: 'rgba(255, 255, 255, 0.02)'
-            }}
+      {/* MAIN CONTENT */}
+      <main style={{ padding: '20px 5%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{ textTransform: 'capitalize', color: '#f5b041' }}>{activeTab} Section</h3>
+          <button 
+            onClick={() => { handleCloseModal(); setShowModal(true); }}
+            style={{ padding: '10px 20px', background: '#f5b041', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
           >
-            <div style={{ fontSize: '2rem', marginBottom: '10px' }}>➕</div>
-            <h4 style={{ margin: '0 0 5px 0' }}>Add New {activeTab}</h4>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-sub)' }}>Click to upload or write</p>
-          </div>
-
-          {/* Sample Card Placeholder */}
-          <div className="empty-rooms-card" style={{ textAlign: 'left', padding: '20px', position: 'relative' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 'bold' }}>
-              BY: SIVA (You)
-            </span>
-            <p style={{ margin: '12px 0', fontSize: '0.95rem', color: '#fff', lineHeight: '1.5' }}>
-              "Happy Birthday Rahul! Hope this year brings you infinite success!"
-            </p>
-
-            {/* EDIT & DELETE ACTIONS */}
-            <div style={{
-              display: 'flex',
-              justify: 'space-between',
-              alignItems: 'center',
-              borderTop: '1px solid var(--border-glass)',
-              paddingTop: '12px',
-              marginTop: '15px'
-            }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>2 mins ago</span>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  className="btn-secondary-dark" 
-                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                  onClick={() => handleOpenEditForm({ id: 1, text: 'Sample text' })}
-                >
-                  ✏️ Edit
-                </button>
-                <button 
-                  className="btn-secondary-dark" 
-                  style={{ padding: '4px 10px', fontSize: '0.75rem', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#fca5a5' }}
-                  onClick={() => alert('Delete triggered')}
-                >
-                  🗑️ Delete
-                </button>
-              </div>
-            </div>
-          </div>
-
+            + Add {activeTab}
+          </button>
         </div>
 
+        {loading ? (
+          <p>Loading items...</p>
+        ) : items.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+            {items.map((item) => (
+              <div key={item.id} style={{ background: '#181f25', padding: '15px', borderRadius: '10px', position: 'relative' }}>
+                
+                {/* Text Content */}
+                {['text', 'memory', 'letter'].includes(item.type) && (
+                  <p style={{ lineHeight: '1.5' }}>{item.content}</p>
+                )}
+
+                {/* Media Render */}
+                {item.type === 'photo' && item.media_url && (
+                  <img src={`http://localhost:8000${item.media_url}`} alt="media" style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '6px' }} />
+                )}
+                {item.type === 'video' && item.media_url && (
+                  <video controls style={{ width: '100%', borderRadius: '6px' }} src={`http://localhost:8000${item.media_url}`} />
+                )}
+                {item.type === 'audio' && item.media_url && (
+                  <audio controls style={{ width: '100%', marginTop: '10px' }} src={`http://localhost:8000${item.media_url}`} />
+                )}
+
+                {item.caption && <p style={{ fontSize: '0.85rem', color: '#aaa', fontStyle: 'italic', marginTop: '8px' }}>"{item.caption}"</p>}
+
+               {/* EDIT & DELETE BUTTONS - User matching check */}
+{currentUser && currentUser.id === item.user_id && (
+  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '15px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
+    <button 
+      onClick={() => handleEditClick(item)} 
+      style={{ background: 'transparent', border: '1px solid #f5b041', color: '#f5b041', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+    >
+      ✏️ Edit
+    </button>
+    <button 
+      onClick={() => handleDelete(item.id)} 
+      style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+    >
+      🗑️ Delete
+    </button>
+  </div>
+)}
+
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ color: '#666' }}>No records found in this category.</p>
+        )}
       </main>
 
-      {/* 5. SEPARATE FORM MODAL LAYOUT */}
-      {showFormModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)',
-          display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
-        }}>
-          <div className="auth-card" style={{ width: '450px', padding: '35px' }}>
-            <h2>{editingItem ? '✏️ Edit' : '➕ Add'} {activeTab.toUpperCase()}</h2>
+      {/* MODAL (Add / Edit) */}
+      {showModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <form onSubmit={handleSubmit} style={{ background: '#181f25', padding: '25px', borderRadius: '10px', width: '90%', maxWidth: '400px' }}>
+            <h3 style={{ color: '#f5b041' }}>{editingItem ? `Edit ${activeTab}` : `Add New ${activeTab}`}</h3>
 
-            <form onSubmit={(e) => { e.preventDefault(); setShowFormModal(false); }}>
-              
-              {/* DYNAMIC FORM FIELDS BASED ON TYPE */}
-              {activeTab === 'text' && (
-                <div className="form-group">
-                  <label>Wish Message</label>
-                  <textarea 
-                    rows="4" 
-                    placeholder="Write your hearty wish..."
-                    className="form-group input" 
-                    style={{ width: '100%', resize: 'none' }}
-                    required 
-                  />
-                </div>
-              )}
+            {['photo', 'video', 'audio'].includes(activeTab) ? (
+              <>
+                <label style={{ display: 'block', margin: '10px 0 5px', fontSize: '0.85rem' }}>
+                  {editingItem ? 'Replace File (Optional):' : 'Select File:'}
+                </label>
+                <input 
+                  type="file" 
+                  onChange={(e) => setFile(e.target.files[0])} 
+                  required={!editingItem} 
+                />
 
-              {activeTab === 'photo' && (
-                <>
-                  <div className="form-group">
-                    <label>Photo URL / File Link</label>
-                    <input type="url" placeholder="https://example.com/photo.jpg" required />
-                  </div>
-                  <div className="form-group">
-                    <label>Caption</label>
-                    <input type="text" placeholder="Memorable trip photo..." />
-                  </div>
-                </>
-              )}
+                <label style={{ display: 'block', margin: '10px 0 5px', fontSize: '0.85rem' }}>Caption:</label>
+                <input 
+                  type="text" 
+                  value={caption} 
+                  onChange={(e) => setCaption(e.target.value)} 
+                  style={{ width: '100%', padding: '8px', background: '#0b0f12', border: '1px solid #333', color: '#fff', borderRadius: '4px' }} 
+                />
+              </>
+            ) : (
+              <>
+                <label style={{ display: 'block', margin: '10px 0 5px', fontSize: '0.85rem' }}>Content:</label>
+                <textarea 
+                  rows="4" 
+                  value={content} 
+                  onChange={(e) => setContent(e.target.value)} 
+                  required 
+                  style={{ width: '100%', padding: '8px', background: '#0b0f12', border: '1px solid #333', color: '#fff', borderRadius: '4px' }} 
+                />
+              </>
+            )}
 
-              {activeTab === 'video' && (
-                <>
-                  <div className="form-group">
-                    <label>Video URL / Embed Link</label>
-                    <input type="url" placeholder="https://youtube.com/..." required />
-                  </div>
-                  <div className="form-group">
-                    <label>Caption</label>
-                    <input type="text" placeholder="Video wish title..." />
-                  </div>
-                </>
-              )}
-
-              {activeTab === 'audio' && (
-                <div className="form-group">
-                  <label>Audio URL / Voice Note Link</label>
-                  <input type="url" placeholder="https://example.com/voice.mp3" required />
-                </div>
-              )}
-
-              {activeTab === 'memory' && (
-                <>
-                  <div className="form-group">
-                    <label>Memory Title</label>
-                    <input type="text" placeholder="College Days Trip 2023" required />
-                  </div>
-                  <div className="form-group">
-                    <label>Story / Detail</label>
-                    <textarea rows="3" placeholder="What happened on that day..." style={{ width: '100%', borderRadius: '8px', padding: '10px', background: 'rgba(0,0,0,0.4)', color: '#fff', border: '1px solid var(--border-glass)' }} />
-                  </div>
-                </>
-              )}
-
-              {activeTab === 'letter' && (
-                <div className="form-group">
-                  <label>Secret Letter Content</label>
-                  <textarea rows="6" placeholder="Dear Friend, On this special day..." style={{ width: '100%', borderRadius: '8px', padding: '10px', background: 'rgba(0,0,0,0.4)', color: '#fff', border: '1px solid var(--border-glass)' }} required />
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '25px' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowFormModal(false)} style={{ flex: 1 }}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" style={{ flex: 1 }}>
-                  {editingItem ? 'Update' : 'Save'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button type="button" onClick={handleCloseModal} style={{ padding: '6px 12px', background: 'transparent', color: '#fff', border: '1px solid #666', borderRadius: '4px', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button type="submit" style={{ padding: '6px 16px', background: '#f5b041', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+                {editingItem ? 'Save Changes' : 'Upload'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

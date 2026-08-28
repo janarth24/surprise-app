@@ -1,21 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import CreateRoomModal from '../components/CreateRoomModal';
 import { useNavigate } from 'react-router-dom';
-import JoinRoomModal from '../components/JoinRoomModal'; // Import Join Modal
+import JoinRoomModal from '../components/JoinRoomModal';
 import API from '../services/api';
 
 export default function Dashboard({ currentUser, onLogout }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showJoinModal, setShowJoinModal] = useState(false); // Modal State
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinedRooms, setJoinedRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
+  
+  // 🔴 PROFILE DROPDOWN & PHOTO STATES
+  const [showDropdown, setShowDropdown] = useState(false);
+const [userState, setUserState] = useState(currentUser);
+
+useEffect(() => {
+  const fetchFreshUserData = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const res = await API.get(`/users/${currentUser.id}`);
+      if (res.data.status === 'success') {
+        setUserState(res.data.user); // DB Fresh Data State Update
+        localStorage.setItem('user', JSON.stringify(res.data.user)); // Local Storage Sync
+      }
+    } catch (err) {
+      console.error("Error fetching user data:", err);
+    }
+  };
+
+  fetchFreshUserData();
+}, []);
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
   const fetchJoinedRooms = async () => {
-    if (!currentUser?.id) return;
+    if (!userState?.id) return;
     try {
       setLoadingRooms(true);
-      const res = await API.get(`/rooms/my-joined-rooms/${currentUser.id}`);
+      const res = await API.get(`/rooms/my-joined-rooms/${userState.id}`);
       if (res.data.status === 'success') {
         setJoinedRooms(res.data.rooms);
       }
@@ -28,24 +50,92 @@ export default function Dashboard({ currentUser, onLogout }) {
 
   useEffect(() => {
     fetchJoinedRooms();
-  }, [currentUser]);
+  }, [userState]);
+
+  // 🔴 HANDLE PROFILE PHOTO UPLOAD
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('user_id', userState.id);
+    formData.append('file', file);
+
+    try {
+      const res = await API.post('/users/upload-profile-photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data.status === 'success') {
+        const updatedUser = res.data.user;
+        setUserState(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser)); // Session sync
+        alert('Profile photo updated successfully!');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Photo upload failed!');
+    }
+  };
 
   return (
     <div className="dashboard-wrapper">
       
-      {/* NAVBAR & HERO SECTION */}
-      <nav className="dashboard-navbar">
+      {/* NAVBAR WITH PROFILE AVATAR & DROPDOWN */}
+      <nav className="dashboard-navbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="nav-logo">
           <h2>SURPRISE<span>HUB</span></h2>
         </div>
-        <div className="nav-links">
-          <span className="user-badge">👤 {currentUser?.name || 'User'}</span>
-          <button className="nav-btn btn-secondary-dark" onClick={onLogout}>Logout</button>
+
+        {/* 🔴 AVATAR & DROPDOWN CONTAINER */}
+        <div style={{ position: 'relative' }}>
+          <div 
+            onClick={() => setShowDropdown(!showDropdown)} 
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: '30px', border: '1px solid rgba(255,255,255,0.1)' }}
+          >
+            {/* PROFILE IMAGE OR DEFAULT AVATAR */}
+            {userState?.profile_photo ? (
+              <img 
+                src={`http://localhost:8000${userState.profile_photo}`} 
+                alt="Profile" 
+                style={{ width: '35px', height: '35px', borderRadius: '50%', objectFit: 'cover' }} 
+              />
+            ) : (
+              <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: 'linear-gradient(135deg, #f5b041, #eb984e)', color: '#000', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                {userState?.name ? userState.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+            )}
+            <span style={{ fontSize: '0.9rem', color: '#fff', fontWeight: 'bold' }}>{userState?.name || 'User'} ▼</span>
+          </div>
+
+          {/* 🔴 DROPDOWN MENU */}
+         {showDropdown && (
+  <div style={{ position: 'absolute', right: 0, marginTop: '10px', width: '180px', background: '#181f25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 100, overflow: 'hidden' }}>
+    
+    {/* 🔴 DIRECT PROFILE PAGE REDIRECT */}
+    <div 
+      onClick={() => { setShowDropdown(false); navigate('/profile'); }} 
+      style={{ padding: '12px 16px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}
+    >
+      👤 Profile & Settings
+    </div>
+
+    {/* LOGOUT */}
+    <div 
+      onClick={() => { setShowDropdown(false); onLogout(); }} 
+      style={{ padding: '12px 16px', color: '#ef4444', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
+    >
+      🚪 Logout
+    </div>
+
+  </div>
+)}
         </div>
       </nav>
 
+      {/* HERO SECTION */}
       <section className="dashboard-hero">
-        <p className="hero-subtext">WELCOME BACK, {currentUser?.name?.toUpperCase() || 'PLANNER'}</p>
+        <p className="hero-subtext">WELCOME BACK, {userState?.name?.toUpperCase() || 'PLANNER'}</p>
         <div className="hero-divider"></div>
         <h1 className="hero-title">Plan Unforgettable Secrets</h1>
         <p className="hero-desc">
@@ -56,7 +146,6 @@ export default function Dashboard({ currentUser, onLogout }) {
           <button className="btn-gold" onClick={() => setShowCreateModal(true)}>
             + CREATE SURPRISE
           </button>
-          {/* JOIN BUTTON HANDLER */}
           <button className="btn-outline" onClick={() => setShowJoinModal(true)}>
             JOIN WITH CODE
           </button>
@@ -75,7 +164,7 @@ export default function Dashboard({ currentUser, onLogout }) {
         ) : joinedRooms.length > 0 ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
             {joinedRooms.map((room) => {
-              const isOrganizer = room.creator_id === currentUser?.id;
+              const isOrganizer = room.creator_id === userState?.id;
               
               return (
                 <div key={room.id} className="empty-rooms-card" style={{ textAlign: 'left', padding: '25px', position: 'relative' }}>
@@ -98,13 +187,13 @@ export default function Dashboard({ currentUser, onLogout }) {
                   </p>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', color: '#cbd5e1', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '12px', marginTop: '10px' }}>
-                   <button 
-  className="btn-secondary-dark" 
-  style={{ padding: '5px 12px', fontSize: '0.8rem' }} 
-  onClick={() => navigate(`/room/${room.room_code}`)}
->
-  Enter Room →
-</button>
+                    <button 
+                      className="btn-secondary-dark" 
+                      style={{ padding: '5px 12px', fontSize: '0.8rem' }} 
+                      onClick={() => navigate(`/room/${room.room_code}`, { state: { roomId: room.id } })}
+                    >
+                      Enter Room →
+                    </button>
                   </div>
                 </div>
               );
@@ -126,7 +215,7 @@ export default function Dashboard({ currentUser, onLogout }) {
       {/* MODALS */}
       {showCreateModal && (
         <CreateRoomModal 
-          currentUser={currentUser} 
+          currentUser={userState} 
           onClose={() => setShowCreateModal(false)}
           onRoomCreated={fetchJoinedRooms}
         />
@@ -134,7 +223,7 @@ export default function Dashboard({ currentUser, onLogout }) {
 
       {showJoinModal && (
         <JoinRoomModal
-          currentUser={currentUser}
+          currentUser={userState}
           onClose={() => setShowJoinModal(false)}
           onRoomJoined={fetchJoinedRooms}
         />

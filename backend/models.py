@@ -11,6 +11,7 @@ class User(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(150), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
+    profile_photo = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -49,6 +50,8 @@ class Contribution(Base):
     content = Column(Text, nullable=True) # Text message or letter content
     media_url = Column(String(255), nullable=True) # Image/Audio/Video file path
     caption = Column(String(255), nullable=True)
+    # Default-a 'approved' nu tharlaam, or admin review-ku 'pending' nu tharlaam
+    status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

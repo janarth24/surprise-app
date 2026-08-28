@@ -1,27 +1,37 @@
-from fastapi import FastAPI, HTTPException, Depends
+import os
+import shutil
+import random
+import string
+from fastapi import FastAPI, HTTPException, Depends, Form, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db
 import models
-import random
-import string
+import bcrypt
+import uuid
 
 
 # ============================================================
-# MySQL Tables Auto-Create
-# ============================================================
-
-models.Base.metadata.create_all(bind=engine)
-
-
-# ============================================================
-# FastAPI App
+# FastAPI App Initialization (MUST BE FIRST)
 # ============================================================
 
 app = FastAPI(
     title="Collaborative Surprise Platform API"
 )
 
+# 🔴 SEPARATE DIRECTORY FOR PROFILES
+PROFILE_DIR = "uploads/profiles"
+os.makedirs(PROFILE_DIR, exist_ok=True) # Directory automatic-a create aagidum
+# Uploads folder setup
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# ============================================================
+# MySQL Tables Auto-Create
+# ============================================================
+
+models.Base.metadata.create_all(bind=engine)
 
 # ============================================================
 # CORS Configuration
@@ -35,6 +45,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def hash_password(password: str) -> str:
+    # Encode to UTF-8, truncate to 72 bytes (bcrypt limit), then hash
+    pwd_bytes = password.encode("utf-8")[:72]
+    return bcrypt.hashpw(pwd_bytes, bcrypt.gensalt()).decode("utf-8")
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    pwd_bytes = plain_password.encode("utf-8")[:72]
+    return bcrypt.checkpw(pwd_bytes, hashed_password.encode("utf-8"))
 
 # ============================================================
 # HOME
@@ -56,7 +75,6 @@ def register_user(
     user_data: dict,
     db: Session = Depends(get_db)
 ):
-
     # 1. Check Email Already Exists
     existing_user = db.query(models.User).filter(
         models.User.email == user_data["email"]
@@ -68,14 +86,17 @@ def register_user(
             detail="Email already registered!"
         )
 
-    # 2. Create New User
+    # 2. Hash raw password before saving
+    hashed_pwd = hash_password(user_data["password"])
+
+    # 3. Create New User with Hashed Password
     new_user = models.User(
         name=user_data["name"],
         email=user_data["email"],
-        password_hash=user_data["password"]
+        password_hash=hashed_pwd
     )
 
-    # 3. Save User to Database
+    # 4. Save User to Database
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -96,14 +117,13 @@ def login_user(
     credentials: dict,
     db: Session = Depends(get_db)
 ):
-
     # 1. Check Email
     user = db.query(models.User).filter(
         models.User.email == credentials["email"]
     ).first()
 
-    # 2. Check Email and Password
-    if not user or user.password_hash != credentials["password"]:
+    # 2. Verify hashed password securely using verify_password()
+    if not user or not verify_password(credentials["password"], user.password_hash):
         raise HTTPException(
             status_code=400,
             detail="Invalid Email or Password!"
@@ -119,6 +139,133 @@ def login_user(
             "email": user.email
         }
     }
+
+
+@app.get("/api/users/{user_id}")
+def get_user_profile(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    return {
+        "status": "success",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "profile_photo": getattr(user, "profile_photo", None)
+        }
+    }   
+
+
+# ============================================================
+# 1. CHANGE PROFILE PHOTO
+# ============================================================
+@app.post("/api/users/upload-profile-photo")
+async def upload_profile_photo(
+    user_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Old photo delete
+    if hasattr(user, 'profile_photo') and user.profile_photo:
+        old_path = user.profile_photo.lstrip("/")
+        if os.path.exists(old_path):
+            try:
+                os.remove(old_path)
+            except Exception as e:
+                print("Error removing file:", e)
+
+    # Save new photo
+    file_ext = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4().hex}{file_ext}"
+    file_path = os.path.join(PROFILE_DIR, unique_filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    user.profile_photo = f"/uploads/profiles/{unique_filename}"
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "success",
+        "message": "Photo updated!",
+        "profile_photo": user.profile_photo,
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "profile_photo": user.profile_photo
+        }
+    }
+
+
+# ============================================================
+# 2. CHANGE PASSWORD (SIMPLE JSON DATA)
+# ============================================================
+@app.post("/api/users/change-password")
+def change_password(data: dict, db: Session = Depends(get_db)):
+    user_id = data.get("user_id")
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Current password check
+    if not verify_password(current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password incorrect!")
+
+    # Update new password hash
+    user.password_hash = hash_password(new_password)
+    db.commit()
+
+    return {"status": "success", "message": "Password changed successfully!"}
+
+
+async def upload_profile_photo(
+    user_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Delete old profile photo if exists
+    if user.profile_photo:
+        old_path = user.profile_photo.lstrip("/")
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+    # Save to uploads/profiles directory with Unique UUID
+    unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
+    file_path = os.path.join(PROFILE_DIR, unique_filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    user.profile_photo = f"/uploads/profiles/{unique_filename}"
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "success",
+        "message": "Profile photo updated!",
+        "profile_photo": user.profile_photo,
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "profile_photo": user.profile_photo
+        }
+    }   
 
 
 # ============================================================
@@ -318,3 +465,199 @@ def join_room(join_data: dict, db: Session = Depends(get_db)):
             status_code=500,
             detail=str(e)
         )
+
+
+# ==========================================
+# CONTRIBUTIONS API ROUTES
+# ==========================================
+
+# 1. ADD CONTRIBUTION (Text / Image / Video / Audio)
+@app.post("/api/contributions/add")
+async def add_contribution(
+    room_id: int = Form(...),
+    user_id: int = Form(...),
+    type: str = Form(...),
+    content: str = Form(None),
+    caption: str = Form(None),
+    file: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
+    saved_url = None
+    
+    if file:
+        # 1. Unique ID generate panni filename-ku munnadi add panrom
+        unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
+        
+        # 2. Uploads folder path
+        file_path = f"uploads/{unique_filename}"
+        
+        # 3. Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        saved_url = f"/uploads/{unique_filename}"
+
+    new_item = models.Contribution(
+        room_id=room_id,
+        user_id=user_id,
+        type=type,
+        content=content,
+        caption=caption,
+        media_url=saved_url
+    )
+    db.add(new_item)
+    db.commit()
+    db.refresh(new_item)
+    
+    return {"status": "success", "message": "Uploaded successfully!", "data": new_item}
+
+
+# GET CONTRIBUTIONS (Only logged-in user's content)
+@app.get("/api/contributions/{room_id}/{user_id}/{type}")
+def get_user_contributions(room_id: int, user_id: int, type: str, db: Session = Depends(get_db)):
+    items = db.query(models.Contribution).filter(
+        models.Contribution.room_id == room_id,
+        models.Contribution.user_id == user_id,  # <-- Indha user-oda content mattum fetch aagum
+        models.Contribution.type == type
+    ).all()
+    return {"status": "success", "data": items}    
+
+# 3. DELETE CONTRIBUTION (Path Variable-a user_id pass panroam)
+@app.delete("/api/contributions/delete/{item_id}/{user_id}")
+def delete_contribution(
+    item_id: int, 
+    user_id: int, 
+    db: Session = Depends(get_db)
+):
+    item = db.query(models.Contribution).filter(models.Contribution.id == item_id).first()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    # SECURITY CHECK
+    if item.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Permission denied! You can only delete your own items.")
+    
+    # File Cleanup
+    if item.media_url:
+        actual_path = item.media_url.lstrip("/")
+        if os.path.exists(actual_path):
+            os.remove(actual_path)
+
+    db.delete(item)
+    db.commit()
+    return {"status": "success", "message": "Deleted successfully"}
+# 4. EDIT / UPDATE CONTRIBUTION (Auth User Only)
+@app.put("/api/contributions/update/{item_id}")
+async def update_contribution(
+    item_id: int,
+    user_id: int = Form(...),  # Form Data-la logged-in user_id anuppuvom
+    content: str = Form(None),
+    caption: str = Form(None),
+    file: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
+    item = db.query(models.Contribution).filter(models.Contribution.id == item_id).first()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # SECURITY CHECK: Owner dhana nu verify panrom
+    if item.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Permission denied! You can only edit your own items.")
+
+    # Text / Caption Updates
+    if content is not None:
+        item.content = content
+    if caption is not None:
+        item.caption = caption
+
+    # New file update logic
+    if file:
+        if item.media_url:
+            old_path = item.media_url.lstrip("/")
+            if os.path.exists(old_path):
+                os.remove(old_path)
+
+        unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
+        file_path = f"uploads/{unique_filename}"
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        item.media_url = f"/uploads/{unique_filename}"
+
+    db.commit()
+    db.refresh(item)
+    return {"status": "success", "message": "Updated successfully", "data": item}
+
+# ============================================================
+# TOGGLE CONTRIBUTION STATUS (Approved / Pending)
+# ============================================================
+@app.patch("/api/contributions/{contribution_id}/status")
+def update_contribution_status(contribution_id: int, db: Session = Depends(get_db)):
+    contrib = db.query(models.Contribution).filter(models.Contribution.id == contribution_id).first()
+    if not contrib:
+        raise HTTPException(status_code=404, detail="Contribution not found")
+
+    # Toggle status between approved and pending
+    new_status = "approved" if contrib.status == "pending" else "pending"
+    contrib.status = new_status
+    
+    db.commit()
+    db.refresh(contrib)
+
+    return {
+        "status": "success",
+        "message": f"Status changed to {new_status}",
+        "new_status": new_status,
+        "contribution_id": contrib.id
+    }    
+
+# ============================================================
+# GET PARTICIPANTS WITH DETAILED DIGITAL CONTRIBUTIONS
+# ============================================================
+@app.get("/api/rooms/code/{room_code}/participants")
+def get_participants_by_code(room_code: str, db: Session = Depends(get_db)):
+    room = db.query(models.Room).filter(models.Room.room_code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    contributions = db.query(models.Contribution).filter(models.Contribution.room_id == room.id).all()
+
+    user_data_map = {}
+    for contrib in contributions:
+        uid = contrib.user_id
+        if uid not in user_data_map:
+            user_data_map[uid] = []
+
+        user_data_map[uid].append({
+            "id": contrib.id,
+            "type": contrib.type,
+            "content": contrib.content,
+            "media_url": contrib.media_url,
+            "caption": contrib.caption,
+            "status": contrib.status,
+            "created_at": contrib.created_at.strftime("%b %d, %Y") if contrib.created_at else None
+        })
+
+    if room.creator_id not in user_data_map:
+        user_data_map[room.creator_id] = []
+
+    participants_data = []
+    for user_id, contrib_list in user_data_map.items():
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if user:
+            participants_data.append({
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "profile_photo": user.profile_photo,
+                "contributions_count": len(contrib_list),
+                "contributions": contrib_list
+            })
+
+    return {
+        "status": "success",
+        "room_id": room.id,
+        "creator_id": room.creator_id,  # 👈 Dynamic Organizer Check-ku
+        "data": participants_data
+    }

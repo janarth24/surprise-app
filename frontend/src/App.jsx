@@ -1,9 +1,11 @@
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import RoomDetails from './pages/RoomDetails';
+import ParticipantsPage from './pages/ParticipantsPage';
+import ProfilePage from './pages/ProfilePage';
 import AnimatedBackground from './components/AnimatedBackground';
 
 function App() {
@@ -63,6 +65,29 @@ function App() {
                 Go to Login
               </button>
             </div>
+          )
+        } />
+
+        {/* Participants Route */}
+        <Route path="/room/:roomCode/participants" element={
+          currentUser ? (
+            <ParticipantsPage currentUser={currentUser} />
+          ) : (
+            <div style={{ textAlign: 'center', paddingTop: '100px', color: '#fff' }}>
+              <h2>Please Login First!</h2>
+              <button className="btn-primary" style={{ width: '200px', marginTop: '20px' }} onClick={() => navigate('/login')}>
+                Go to Login
+              </button>
+            </div>
+          )
+        } />
+
+        {/* 🔴 PROFILE ROUTE - MOVED INSIDE <Routes> */}
+        <Route path="/profile" element={
+          currentUser ? (
+            <ProfilePage currentUser={currentUser} setCurrentUser={setCurrentUser} />
+          ) : (
+            <Navigate to="/login" />
           )
         } />
       </Routes>
