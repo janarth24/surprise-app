@@ -1,0 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=Playfair+Display:ital,wght@1,700&display=swap');
+
+.surprise-app-wrapper {
+  min-height: 100vh;
+  background: #030712;
+  color: #fff;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Intro & Lock Screen */
+.intro-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 20px;
+  background: radial-gradient(circle at center, #1e1b4b 0%, #030712 100%);
+}
+
+.glow-teaser-text {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.8rem;
+  font-style: italic;
+  background: linear-gradient(135deg, #fce7f3, #c084fc, #818cf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: pulseGlow 1.5s infinite ease-in-out;
+}
+
+/* Balloon Sky Canvas */
+.sky-realm {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at top, #2e1065 0%, #030712 90%);
+  overflow: hidden;
+}
+
+.sky-header {
+  position: absolute;
+  top: 25px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.sky-title {
+  font-size: 2.2rem;
+  margin: 0;
+  background: linear-gradient(135deg, #f472b6, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 🎈 BIGGER & FASTER BALLOONS */
+.interactive-balloon {
+  position: absolute;
+  bottom: -150px;
+  width: 110px;  /* Increased Balloon Width */
+  height: 135px; /* Increased Balloon Height */
+  border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset -12px -12px 25px rgba(0, 0, 0, 0.35), 0 12px 30px rgba(255, 255, 255, 0.2);
+  animation: floatUpwardFast linear infinite;
+  transition: transform 0.15s ease;
+  user-select: none;
+}
+
+.interactive-balloon:hover {
+  transform: scale(1.18) !important;
+  filter: brightness(1.2);
+}
+
+.interactive-balloon::after {
+  content: "";
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  width: 2px;
+  height: 26px;
+  background: rgba(255, 255, 255, 0.6);
+  transform: translateX(-50%);
+}
+
+.balloon-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+  color: #fff;
+}
+
+/* 🎁 Pop-up Modal */
+.message-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.88);
+  backdrop-filter: blur(14px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  animation: fadeIn 0.25s ease;
+}
+
+.message-card {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(192, 132, 252, 0.4);
+  border-radius: 24px;
+  padding: 30px 25px;
+  max-width: 480px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(168, 85, 247, 0.35);
+  animation: popScale 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-media {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 14px;
+  margin: 15px 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sender-tag {
+  color: #c084fc;
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-top: 15px;
+}
+
+/* Keyframes - Faster Speed (3s to 5s travel) */
+@keyframes floatUpwardFast {
+  0% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-60vh) rotate(6deg); }
+  100% { transform: translateY(-125vh) rotate(-6deg); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.4; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes popScale {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

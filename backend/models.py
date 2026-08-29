@@ -32,6 +32,7 @@ class Room(Base):
     title = Column(String(200), nullable=False)
     theme = Column(String(50), default="default")
     is_published = Column(Integer, default=0) # 0 = Draft, 1 = Published
+    gift_password = Column(String(100), nullable=True) # 🔑 Target person password protection
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

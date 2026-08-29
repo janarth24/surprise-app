@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../services/api';
+import { getMediaUrl } from '../services/config';
 
 export default function ProfilePage({ currentUser, setCurrentUser }) {
   const navigate = useNavigate();
@@ -122,7 +123,7 @@ export default function ProfilePage({ currentUser, setCurrentUser }) {
               <div style={{ position: 'relative', width: '110px', height: '110px', margin: '0 auto 15px' }}>
                 {userProfile?.profile_photo ? (
                   <img 
-                    src={`http://localhost:8000${userProfile.profile_photo}?t=${new Date().getTime()}`} 
+                    src={`${getMediaUrl(userProfile.profile_photo)}?t=${new Date().getTime()}`} 
                     alt="Profile" 
                     style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '2px solid #f5b041' }} 
                   />

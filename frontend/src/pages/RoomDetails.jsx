@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import API from '../services/api';
+import { getMediaUrl } from '../services/config';
 
 export default function RoomDetails({ currentUser }) {
   const { roomCode } = useParams();
@@ -215,13 +216,13 @@ const handleSubmit = async (e) => {
 
                 {/* Media Render */}
                 {item.type === 'photo' && item.media_url && (
-                  <img src={`http://localhost:8000${item.media_url}`} alt="media" style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '6px' }} />
+                  <img src={getMediaUrl(item.media_url)} alt="media" style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '6px' }} />
                 )}
                 {item.type === 'video' && item.media_url && (
-                  <video controls style={{ width: '100%', borderRadius: '6px' }} src={`http://localhost:8000${item.media_url}`} />
+                  <video controls style={{ width: '100%', borderRadius: '6px' }} src={getMediaUrl(item.media_url)} />
                 )}
                 {item.type === 'audio' && item.media_url && (
-                  <audio controls style={{ width: '100%', marginTop: '10px' }} src={`http://localhost:8000${item.media_url}`} />
+                  <audio controls style={{ width: '100%', marginTop: '10px' }} src={getMediaUrl(item.media_url)} />
                 )}
 
                 {item.caption && <p style={{ fontSize: '0.85rem', color: '#aaa', fontStyle: 'italic', marginTop: '8px' }}>"{item.caption}"</p>}

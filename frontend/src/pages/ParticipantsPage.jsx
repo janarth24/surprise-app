@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import API from '../services/api';
-
-// Dynamic Media Base URL (Fallback to localhost if API config base doesn't exist)
-const MEDIA_BASE_URL = API.defaults?.baseURL
-  ? API.defaults.baseURL.replace(/\/api\/?$/, '')
-  : 'http://localhost:8000';
+import { getMediaUrl } from '../services/config';
 
 export default function ParticipantsPage({ currentUser }) {
   const { roomCode } = useParams();
@@ -17,6 +13,13 @@ export default function ParticipantsPage({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
+
+  // 🟢 Public Link & Password Modal States
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [giftPassword, setGiftPassword] = useState('');
+  const [publicSlug, setPublicSlug] = useState('');
+  const [savingLink, setSavingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Get current logged-in user ID safely
   const loggedInUserId = currentUser?.id || currentUser?.user_id;
@@ -41,10 +44,15 @@ export default function ParticipantsPage({ currentUser }) {
           if (participantsRes.data.creator_id) {
             setCreatorId(participantsRes.data.creator_id);
           } 
+          
           // Priority 2: Room detail fallback
-          else if (roomRes?.data) {
+          if (roomRes?.data) {
             const rData = roomRes.data.data || roomRes.data;
-            setCreatorId(rData.creator_id);
+            if (!participantsRes.data.creator_id) setCreatorId(rData.creator_id);
+            
+            // 🟢 Pre-fill existing public_slug & password if available from DB
+            if (rData.public_slug && rData.public_slug.trim()) setPublicSlug(rData.public_slug.trim());
+            if (rData.gift_password && rData.gift_password.trim()) setGiftPassword(rData.gift_password.trim());
           }
         }
       } catch (err) {
@@ -57,12 +65,55 @@ export default function ParticipantsPage({ currentUser }) {
     fetchParticipantsAndRoom();
   }, [roomCode]);
 
-  // Safe and strict type-agnostic condition for Room Organizer check
+  // Safe condition for Organizer check
   const isOrganizer = Boolean(
     loggedInUserId && 
     creatorId && 
     String(loggedInUserId).trim() === String(creatorId).trim()
   );
+
+  // 🟢 FIRST TIME LINK GENERATION (Saves Domain/URL & Password to DB)
+  const handleGenerateLink = async (e) => {
+    e.preventDefault();
+    if (!giftPassword.trim()) {
+      alert('Please enter a password for the target person!');
+      return;
+    }
+
+    // Full domain URL dynamic generation
+    const randomSlug = `surprise-${roomCode.toLowerCase()}-${Math.random().toString(36).substring(2, 7)}`;
+    const fullPublicUrl = `${window.location.origin}/surprise/${randomSlug}`;
+
+    try {
+      setSavingLink(true);
+      const res = await API.post(`/rooms/code/${roomCode}/generate-link`, {
+        password: giftPassword,
+        public_url: fullPublicUrl
+      });
+
+      if (res.data.status === 'success') {
+        setPublicSlug(res.data.public_url || fullPublicUrl);
+        if (res.data.gift_password) setGiftPassword(res.data.gift_password);
+        alert('Public Link & Password created successfully!');
+      }
+    } catch (err) {
+      console.error('Failed to generate link:', err);
+      alert('Error setting surprise link details');
+    } finally {
+      setSavingLink(false);
+    }
+  };
+
+  // 🟢 COPY LINK TO CLIPBOARD
+  const handleCopyLink = () => {
+    const fullUrl = publicSlug.startsWith('http') 
+      ? publicSlug 
+      : `${window.location.origin}/surprise/${publicSlug}`;
+
+    navigator.clipboard.writeText(fullUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // Toggle Contribution Status Function
   const handleToggleStatus = async (contribId) => {
@@ -72,7 +123,6 @@ export default function ParticipantsPage({ currentUser }) {
       if (res.data.status === 'success') {
         const updatedStatus = res.data.new_status;
 
-        // 1. Modal State local update
         setSelectedUser((prev) => {
           if (!prev) return null;
           return {
@@ -83,7 +133,6 @@ export default function ParticipantsPage({ currentUser }) {
           };
         });
 
-        // 2. Participants list local update
         setParticipants((prev) =>
           prev.map((user) => ({
             ...user,
@@ -103,26 +152,32 @@ export default function ParticipantsPage({ currentUser }) {
     }
   };
 
-  // Helper function to build dynamic media URLs cleanly
-  const getMediaUrl = (path) => {
-    if (!path) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    return `${MEDIA_BASE_URL}${cleanPath}`;
-  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#0b0f12', color: '#fff', padding: '30px 5%' }}>
       {/* HEADER */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '30px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '15px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '30px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
         <button 
           onClick={() => navigate(`/room/${roomCode}`, { state: { roomId } })}
           style={{ padding: '8px 16px', background: '#121619', color: '#fff', border: '1px solid #333', borderRadius: '6px', cursor: 'pointer' }}
         >
           ← Back to Room
         </button>
+
         <h2 style={{ margin: 0, color: '#a855f7' }}>👥 Room Participants</h2>
-        <span style={{ color: '#aaa', fontSize: '0.9rem' }}>Code: {roomCode}</span>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          {/* 🟢 DYNAMIC BUTTON: DB-la Link irundha View Button, illana Generate Button */}
+          {isOrganizer && (
+            <button
+              onClick={() => setShowLinkModal(true)}
+              style={{ padding: '8px 16px', background: 'linear-gradient(135deg, #a855f7, #6366f1)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              {publicSlug ? '🎁 View Surprise Link' : '🎁 Generate Surprise Link'}
+            </button>
+          )}
+          <span style={{ color: '#aaa', fontSize: '0.9rem' }}>Code: {roomCode}</span>
+        </div>
       </div>
 
       {/* PARTICIPANTS GRID */}
@@ -160,7 +215,6 @@ export default function ParticipantsPage({ currentUser }) {
                     gap: '15px'
                   }}
                 >
-                  {/* USER INFO */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     {user.profile_photo ? (
                       <img 
@@ -193,7 +247,6 @@ export default function ParticipantsPage({ currentUser }) {
                     </div>
                   </div>
 
-                  {/* DIGITAL CONTRIBUTIONS SUMMARY */}
                   <div style={{ background: '#0b0f12', padding: '10px 14px', borderRadius: '8px', border: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.85rem', color: '#aaa' }}>Surprise Added:</span>
                     <strong style={{ color: '#f5b041', fontSize: '0.95rem' }}>
@@ -201,7 +254,6 @@ export default function ParticipantsPage({ currentUser }) {
                     </strong>
                   </div>
 
-                  {/* VIEW USER MEMORIES BUTTON - STRICTLY ORGANIZER ONLY */}
                   {isOrganizer && user.contributions_count > 0 && (
                     <button 
                       onClick={() => setSelectedUser(user)}
@@ -219,7 +271,7 @@ export default function ParticipantsPage({ currentUser }) {
         )}
       </div>
 
-      {/* MODAL: VIEW & APPROVE CONTRIBUTIONS (ORGANIZER ONLY) */}
+      {/* MODAL 1: VIEW & APPROVE CONTRIBUTIONS */}
       {selectedUser && isOrganizer && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px' }}>
           <div style={{ background: '#121619', maxWidth: '600px', width: '100%', maxHeight: '85vh', overflowY: 'auto', borderRadius: '12px', padding: '25px', border: '1px solid #a855f7' }}>
@@ -236,7 +288,6 @@ export default function ParticipantsPage({ currentUser }) {
                       Type: {item.type || 'Contribution'}
                     </span>
 
-                    {/* STATUS TOGGLE BUTTON */}
                     <button
                       onClick={() => handleToggleStatus(item.id)}
                       disabled={updatingId === item.id}
@@ -272,6 +323,79 @@ export default function ParticipantsPage({ currentUser }) {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🟢 MODAL 2: SURPRISE LINK & PASSWORD SHOW / GENERATE */}
+      {showLinkModal && isOrganizer && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: '#121619', maxWidth: '480px', width: '100%', borderRadius: '12px', padding: '25px', border: '1px solid #a855f7' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: '#f5b041' }}>
+                {publicSlug ? '🎁 Surprise Link Details' : '🎁 Create Surprise Link'}
+              </h3>
+              <button onClick={() => setShowLinkModal(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {/* 🟢 IF PUBLIC SLUG / LINK EXISTS IN DB -> SHOW READONLY DETAILS */}
+            {publicSlug ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', color: '#aaa', display: 'block', marginBottom: '6px' }}>
+                    Public Surprise Link:
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={publicSlug.startsWith('http') ? publicSlug : `${window.location.origin}/surprise/${publicSlug}`}
+                      style={{ flex: 1, padding: '10px', background: '#0b0f12', border: '1px solid #333', color: '#a855f7', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 'bold' }}
+                    />
+                    <button 
+                      onClick={handleCopyLink}
+                      style={{ padding: '10px 14px', background: '#22c55e', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}
+                    >
+                      {copied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.85rem', color: '#aaa', display: 'block', marginBottom: '6px' }}>
+                    Gift Password:
+                  </label>
+                  <input 
+                    type="text" 
+                    readOnly
+                    value={giftPassword}
+                    style={{ width: '100%', padding: '10px', background: '#0b0f12', border: '1px solid #333', color: '#f5b041', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.95rem' }}
+                  />
+                </div>
+              </div>
+            ) : (
+              /* 🟢 FIRST TIME CREATION FORM */
+              <form onSubmit={handleGenerateLink} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', color: '#aaa', display: 'block', marginBottom: '6px' }}>Set Password for Target Person:</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Secret123 or Birthday2026"
+                    value={giftPassword}
+                    onChange={(e) => setGiftPassword(e.target.value)}
+                    style={{ width: '100%', padding: '10px', background: '#0b0f12', border: '1px solid #333', color: '#fff', borderRadius: '6px', outline: 'none' }}
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={savingLink}
+                  style={{ padding: '10px', background: '#a855f7', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  {savingLink ? 'Generating...' : 'Save Password & Generate Link'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

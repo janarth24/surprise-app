@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import RoomDetails from './pages/RoomDetails';
 import ParticipantsPage from './pages/ParticipantsPage';
 import ProfilePage from './pages/ProfilePage';
+import SurprisePage from './pages/SurprisePage'; // 🟢 1. IMPORT ADD PANNIYACHU
 import AnimatedBackground from './components/AnimatedBackground';
 
 function App() {
@@ -82,7 +83,7 @@ function App() {
           )
         } />
 
-        {/* 🔴 PROFILE ROUTE - MOVED INSIDE <Routes> */}
+        {/* PROFILE ROUTE */}
         <Route path="/profile" element={
           currentUser ? (
             <ProfilePage currentUser={currentUser} setCurrentUser={setCurrentUser} />
@@ -90,6 +91,10 @@ function App() {
             <Navigate to="/login" />
           )
         } />
+
+        {/* 🟢 2. INGA DHAAN ADD PANNANUM (Public Route - No Login Required) */}
+        <Route path="/surprise/:slug" element={<SurprisePage />} />
+
       </Routes>
     </AnimatedBackground>
   );

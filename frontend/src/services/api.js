@@ -1,8 +1,10 @@
 import axios from 'axios';
+import { API_BASE_URL } from './config';
 
-// Single Centralized Base URL Setup
+// Base URL is read from .env (dev) or .env.production (prod)
+// To switch environments, just update those files — never change this file.
 const API = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api', // Endpoints-ku Common Base URL
+  baseURL: API_BASE_URL,
 });
 
-export default API;
+export default API;

@@ -6,10 +6,23 @@ from fastapi import FastAPI, HTTPException, Depends, Form, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models
 import bcrypt
 import uuid
+
+# ============================================================
+# ENV CONFIG — Reads from .env file if present
+# Change FRONTEND_BASE_URL in .env to switch environments
+# ============================================================
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv optional; use OS env vars directly
+
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
 
 
 # ============================================================
@@ -613,6 +626,32 @@ def update_contribution_status(contribution_id: int, db: Session = Depends(get_d
     }    
 
 # ============================================================
+# GET ROOM DETAILS BY CODE (for public_slug & gift_password fetch)
+# ============================================================
+@app.get("/api/rooms/code/{room_code}")
+def get_room_by_code(room_code: str, db: Session = Depends(get_db)):
+    room = db.query(models.Room).filter(models.Room.room_code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    return {
+        "status": "success",
+        "data": {
+            "id": room.id,
+            "title": room.title,
+            "target_name": room.target_name,
+            "event_date": str(room.event_date),
+            "room_code": room.room_code,
+            "theme": room.theme,
+            "creator_id": room.creator_id,
+            "public_slug": room.public_slug,
+            "gift_password": room.gift_password,
+            "is_published": room.is_published
+        }
+    }
+
+
+# ============================================================
 # GET PARTICIPANTS WITH DETAILED DIGITAL CONTRIBUTIONS
 # ============================================================
 @app.get("/api/rooms/code/{room_code}/participants")
@@ -660,4 +699,97 @@ def get_participants_by_code(room_code: str, db: Session = Depends(get_db)):
         "room_id": room.id,
         "creator_id": room.creator_id,  # 👈 Dynamic Organizer Check-ku
         "data": participants_data
+    }
+
+
+
+    # ============================================================
+# GENERATE PUBLIC LINK & SET GIFT PASSWORD
+# ============================================================
+@app.post("/api/rooms/code/{room_code}/generate-link")
+def generate_public_link(
+    room_code: str, 
+    payload: dict, 
+    db: Session = Depends(get_db)
+):
+    # 1. Fetch Room from DB
+    room = db.query(models.Room).filter(models.Room.room_code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # 2. Function-kullaye Dict la irundhu values extract panrom
+    password = payload.get("password", "").strip()
+    public_url = payload.get("public_url", "").strip()
+
+    # 3. Validation inside function
+    if not password:
+        raise HTTPException(status_code=400, detail="Password is required")
+
+    # 4. Public URL illana auto-generate fallback (Option)
+    if not public_url:
+        random_slug = f"surprise-{room_code.lower()}-{uuid.uuid4().hex[:5]}"
+        public_url = f"{FRONTEND_BASE_URL}/surprise/{random_slug}"
+
+    # 5. DB Updates
+    room.gift_password = password
+    room.public_slug = public_url  # Storing full URL directly
+    room.is_published = 1          # Auto publish room
+    
+    db.commit()
+    db.refresh(room)
+
+    # 6. Response
+    return {
+        "status": "success",
+        "message": "Public link & Password generated successfully!",
+        "public_url": room.public_slug,
+        "gift_password": room.gift_password,
+        "is_published": room.is_published
+    }
+
+# ============================================================
+# FETCH PUBLIC SURPRISE PAGE DATA BY SLUG (UPDATED SCHEMA FIX)
+# ============================================================
+@app.get("/api/rooms/public/surprise/{slug}")
+def get_public_surprise(slug: str, db: Session = Depends(get_db)):
+    # 1. DB-la public_slug column matching check panrom
+    room = db.query(models.Room).filter(
+        models.Room.public_slug.like(f"%{slug}%")
+    ).first()
+
+    if not room:
+        raise HTTPException(
+            status_code=404, 
+            detail="Surprise page not found or link expired!"
+        )
+
+    # 2. Approved contributions fetch panrom
+    contributions = db.query(models.Contribution).filter(
+        models.Contribution.room_id == room.id,
+        models.Contribution.status == "approved"
+    ).all()
+
+    # 3. Room schema-la irukku target_name & title-a correct-a mapping panrom
+    return {
+        "status": "success",
+        "data": {
+            "id": room.id,
+            "title": room.title,
+            "target_name": room.target_name,
+            "description": f"A special surprise gallery curated for {room.target_name}!",
+            "event_date": room.event_date,
+            "theme": room.theme,
+            "gift_password": room.gift_password,
+            "contributions": [
+                {
+                    "id": c.id,
+                    "sender_name": getattr(c, 'sender_name', 'Well Wisher'),
+                    "content": getattr(c, 'content', ''),
+                    "media_url": getattr(c, 'media_url', ''),
+                    "type": getattr(c, 'type', 'wish'),
+                    "caption": getattr(c, 'caption', '')
+                }
+                for c in contributions
+            ]
+        }
     }

@@ -3,6 +3,7 @@ import CreateRoomModal from '../components/CreateRoomModal';
 import { useNavigate } from 'react-router-dom';
 import JoinRoomModal from '../components/JoinRoomModal';
 import API from '../services/api';
+import { getMediaUrl } from '../services/config';
 
 export default function Dashboard({ currentUser, onLogout }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -96,7 +97,7 @@ useEffect(() => {
             {/* PROFILE IMAGE OR DEFAULT AVATAR */}
             {userState?.profile_photo ? (
               <img 
-                src={`http://localhost:8000${userState.profile_photo}`} 
+                src={getMediaUrl(userState.profile_photo)} 
                 alt="Profile" 
                 style={{ width: '35px', height: '35px', borderRadius: '50%', objectFit: 'cover' }} 
               />
