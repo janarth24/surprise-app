@@ -763,10 +763,10 @@ def get_public_surprise(slug: str, db: Session = Depends(get_db)):
             detail="Surprise page not found or link expired!"
         )
 
-    # 2. Approved contributions fetch panrom
+    # 2. Fetch approved and active contributions
     contributions = db.query(models.Contribution).filter(
         models.Contribution.room_id == room.id,
-        models.Contribution.status == "approved"
+        models.Contribution.status != "rejected"
     ).all()
 
     # 3. Room schema-la irukku target_name & title-a correct-a mapping panrom
@@ -783,10 +783,10 @@ def get_public_surprise(slug: str, db: Session = Depends(get_db)):
             "contributions": [
                 {
                     "id": c.id,
-                    "sender_name": getattr(c, 'sender_name', 'Well Wisher'),
+                    "sender_name": c.user.name if (c.user and c.user.name) else getattr(c, 'sender_name', 'Special Guest'),
                     "content": getattr(c, 'content', ''),
                     "media_url": getattr(c, 'media_url', ''),
-                    "type": getattr(c, 'type', 'wish'),
+                    "type": getattr(c, 'type', 'text') or 'text',
                     "caption": getattr(c, 'caption', '')
                 }
                 for c in contributions

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=Playfair+Display:ital,wght@1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@1,600;1,800&family=Caveat:wght@600;700&display=swap');
 
 .surprise-app-wrapper {
   min-height: 100vh;
@@ -7,9 +7,10 @@
   font-family: 'Plus Jakarta Sans', sans-serif;
   overflow: hidden;
   position: relative;
+  user-select: none;
 }
 
-/* Intro & Lock Screen */
+/* Lock & Teaser Screen */
 .intro-container {
   min-height: 100vh;
   display: flex;
@@ -17,150 +18,852 @@
   justify-content: center;
   align-items: center;
   text-align: center;
-  padding: 20px;
+  padding: 24px;
   background: radial-gradient(circle at center, #1e1b4b 0%, #030712 100%);
 }
 
 .glow-teaser-text {
   font-family: 'Playfair Display', serif;
-  font-size: 2.8rem;
+  font-size: clamp(2rem, 5vw, 3.2rem);
   font-style: italic;
   background: linear-gradient(135deg, #fce7f3, #c084fc, #818cf8);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: pulseGlow 1.5s infinite ease-in-out;
+  animation: pulseGlow 2s infinite ease-in-out;
+  max-width: 700px;
+  line-height: 1.3;
 }
 
-/* Balloon Sky Canvas */
+/* Balloon Sky Canvas (Covers 100vw and 100vh) */
 .sky-realm {
   position: relative;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle at top, #2e1065 0%, #030712 90%);
+  background: radial-gradient(circle at top, #1e1035 0%, #090314 60%, #030712 100%);
   overflow: hidden;
 }
 
+/* Animated starry background glow */
+.sky-realm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.7), rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 90px 40px, #fff, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 160px 120px, #fbcfe8, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 230px 220px, #c084fc, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 310px 160px, #fff, rgba(0,0,0,0));
+  background-repeat: repeat;
+  background-size: 350px 350px;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* Header & Counter */
 .sky-header {
   position: absolute;
-  top: 25px;
+  top: 20px;
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
   z-index: 10;
-  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  width: 90%;
+  max-width: 650px;
 }
 
 .sky-title {
-  font-size: 2.2rem;
+  font-size: clamp(1.3rem, 3.2vw, 2.1rem);
+  font-weight: 800;
   margin: 0;
-  background: linear-gradient(135deg, #f472b6, #c084fc);
+  background: linear-gradient(135deg, #f472b6, #c084fc, #60a5fa);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 30px rgba(192, 132, 252, 0.4);
 }
 
-/* 🎈 BIGGER & FASTER BALLOONS */
+.sky-subtitle {
+  color: #94a3b8;
+  font-size: clamp(0.8rem, 2vw, 0.95rem);
+  margin: 0;
+}
+
+.sky-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.progress-pill {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(192, 132, 252, 0.3);
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.view-all-btn {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  color: #d8b4fe;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-all-btn:hover {
+  background: rgba(168, 85, 247, 0.4);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* 🎈 3D VIBRANT FLOATING BALLOONS (FULL PAGE COVERAGE) */
 .interactive-balloon {
   position: absolute;
-  bottom: -150px;
-  width: 110px;  /* Increased Balloon Width */
-  height: 135px; /* Increased Balloon Height */
+  bottom: -180px;
+  width: clamp(105px, 9vw, 130px);  
+  height: clamp(130px, 11vw, 160px); 
   border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  box-shadow: inset -12px -12px 25px rgba(0, 0, 0, 0.35), 0 12px 30px rgba(255, 255, 255, 0.2);
-  animation: floatUpwardFast linear infinite;
-  transition: transform 0.15s ease;
+  box-shadow: 
+    inset -14px -14px 28px rgba(0, 0, 0, 0.45),
+    inset 10px 10px 20px rgba(255, 255, 255, 0.4),
+    0 15px 35px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   user-select: none;
+  touch-action: manipulation;
+  z-index: 5;
 }
 
-.interactive-balloon:hover {
-  transform: scale(1.18) !important;
-  filter: brightness(1.2);
+/* Sway animation classes across whole page */
+.interactive-balloon.sway-left {
+  animation-name: floatUpwardLeft;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
 
+.interactive-balloon.sway-right {
+  animation-name: floatUpwardRight;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.interactive-balloon.sway-center {
+  animation-name: floatUpwardCenter;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* Glossy 3D Highlight Reflection on Balloon */
+.interactive-balloon::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: 22px;
+  width: 26px;
+  height: 46px;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 75%);
+  border-radius: 50%;
+  transform: rotate(-35deg);
+  pointer-events: none;
+}
+
+/* Balloon String & Tie Knot */
 .interactive-balloon::after {
   content: "";
   position: absolute;
-  bottom: -24px;
+  bottom: -28px;
   left: 50%;
   width: 2px;
-  height: 26px;
-  background: rgba(255, 255, 255, 0.6);
+  height: 30px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.2));
   transform: translateX(-50%);
+  pointer-events: none;
 }
 
-.balloon-badge {
-  font-size: 0.7rem;
-  font-weight: 800;
-  background: rgba(0, 0, 0, 0.4);
-  padding: 3px 8px;
+.balloon-knot {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 8px;
+  background: inherit;
+  border-radius: 4px;
+  filter: brightness(0.85);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.interactive-balloon:hover {
+  transform: scale(1.12);
+  filter: brightness(1.1);
+  z-index: 15;
+}
+
+/* 💥 BURST / POPPING ANIMATION */
+.interactive-balloon.is-popping {
+  animation: balloonBurst 0.24s cubic-bezier(0.1, 0.9, 0.2, 1) forwards !important;
+  pointer-events: none;
+  z-index: 30;
+}
+
+@keyframes balloonBurst {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: brightness(1.2);
+  }
+  35% {
+    transform: scale(1.35) rotate(5deg);
+    filter: brightness(1.8) drop-shadow(0 0 35px rgba(255, 255, 255, 0.95));
+  }
+  70% {
+    transform: scale(1.7) rotate(-8deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.2) rotate(12deg);
+    opacity: 0;
+    filter: blur(8px);
+  }
+}
+
+/* Pop Shockwave Ring */
+.pop-shockwave {
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.8), inset 0 0 20px rgba(192, 132, 252, 0.8);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.2);
+  animation: shockwaveExpand 0.25s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes shockwaveExpand {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+  }
+}
+
+.balloon-username {
+  font-size: 0.76rem;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  padding: 4px 10px;
   border-radius: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   margin-top: 4px;
   color: #fff;
+  max-width: 95px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-/* 🎁 Pop-up Modal */
+.balloon-icon {
+  font-size: 2.3rem;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+}
+
+/* 💌 REVEALED TEXT MESSAGE MODAL */
 .message-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(3, 7, 18, 0.88);
-  backdrop-filter: blur(14px);
+  background: rgba(3, 7, 18, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 100;
+  padding: 20px;
   animation: fadeIn 0.25s ease;
 }
 
 .message-card {
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(192, 132, 252, 0.4);
-  border-radius: 24px;
-  padding: 30px 25px;
-  max-width: 480px;
-  width: 90%;
+  position: relative;
+  background: linear-gradient(145deg, rgba(26, 16, 48, 0.95), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(192, 132, 252, 0.45);
+  border-radius: 28px;
+  padding: 38px 32px 30px;
+  max-width: 520px;
+  width: 100%;
   text-align: center;
-  box-shadow: 0 20px 50px rgba(168, 85, 247, 0.35);
+  box-shadow: 
+    0 25px 60px rgba(0, 0, 0, 0.7),
+    0 0 40px rgba(168, 85, 247, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   animation: popScale 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  max-height: 85vh;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #94a3b8;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  transform: rotate(90deg);
+}
+
+.message-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 20px;
+  color: #d8b4fe;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.message-content-box {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 18px;
+  padding: 22px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 10px 0 20px;
+  max-height: 250px;
   overflow-y: auto;
 }
 
-.modal-media {
-  width: 100%;
-  max-height: 260px;
-  object-fit: cover;
-  border-radius: 14px;
-  margin: 15px 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.message-text {
+  font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+  line-height: 1.7;
+  color: #f8fafc;
+  font-weight: 500;
+  white-space: pre-line;
+  margin: 0;
+  font-style: italic;
 }
 
 .sender-tag {
   color: #c084fc;
-  font-weight: 700;
-  font-size: 1.1rem;
-  margin-top: 15px;
+  font-weight: 800;
+  font-size: 1.15rem;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-/* Keyframes - Faster Speed (3s to 5s travel) */
-@keyframes floatUpwardFast {
-  0% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-60vh) rotate(6deg); }
-  100% { transform: translateY(-125vh) rotate(-6deg); }
+.pop-next-btn {
+  width: 100%;
+  padding: 14px 28px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 25px rgba(168, 85, 247, 0.45);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pop-next-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(168, 85, 247, 0.6);
+  filter: brightness(1.1);
+}
+
+.pop-next-btn.all-unlocked-btn {
+  background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6);
+  animation: pulseGlow 1.8s infinite ease-in-out;
+}
+
+/* ⏳ 1, 2, 3 COUNTDOWN SCREEN */
+.countdown-screen {
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  background: radial-gradient(circle at center, #2e0854 0%, #080214 70%, #000000 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.countdown-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 10;
+}
+
+.countdown-badge {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #fde047;
+  text-transform: uppercase;
+  background: rgba(253, 224, 71, 0.12);
+  border: 1px solid rgba(253, 224, 71, 0.4);
+  padding: 8px 24px;
+  border-radius: 30px;
+  box-shadow: 0 0 20px rgba(253, 224, 71, 0.2);
+}
+
+.countdown-number {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(6rem, 16vw, 11rem);
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, #ffffff 0%, #fde047 40%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 45px rgba(236, 72, 153, 0.8));
+  animation: countdownPulse 0.95s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.countdown-subtext {
+  font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+@keyframes countdownPulse {
+  0% {
+    transform: scale(0.65);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}
+
+/* 🖼️ ANIMATED CINEMATIC PHOTO GALLERY (DIFFERENT FRAMES) */
+.gallery-realm {
+  min-height: 100vh;
+  width: 100vw;
+  background: radial-gradient(circle at top, #1a082e 0%, #090212 50%, #030712 100%);
+  padding: 30px 20px 80px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.gallery-header-section {
+  text-align: center;
+  max-width: 750px;
+  margin: 0 auto 35px;
+  position: relative;
+  z-index: 5;
+}
+
+.gallery-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 18px;
+  border-radius: 20px;
+  background: rgba(236, 72, 153, 0.18);
+  border: 1px solid rgba(236, 72, 153, 0.4);
+  color: #f472b6;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.gallery-main-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 800;
+  margin: 0 0 10px 0;
+  background: linear-gradient(135deg, #fce7f3, #f472b6, #c084fc, #60a5fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gallery-main-subtitle {
+  color: #94a3b8;
+  font-size: clamp(0.9rem, 2vw, 1.05rem);
+  margin: 0 0 20px 0;
+}
+
+.gallery-nav-bar {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 🎨 PHOTO CARDS GRID WITH DISTINCT PHOTO FRAMES */
+.photo-frames-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 32px 26px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 10px;
+}
+
+/* Base Frame Item Animation */
+.photo-frame-item {
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.photo-frame-item:hover {
+  transform: translateY(-8px) scale(1.03) !important;
+  z-index: 15;
+}
+
+.photo-img-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.photo-actual-img {
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s ease;
+}
+
+.photo-frame-item:hover .photo-actual-img {
+  transform: scale(1.06);
+}
+
+/* 1️⃣ FRAME STYLE: POLAROID CLASSIC */
+.frame-polaroid {
+  background: #fdfdfd;
+  color: #1e293b;
+  padding: 14px 14px 44px 14px;
+  border-radius: 4px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  transform: rotate(-2deg);
+}
+
+.frame-polaroid::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%) rotate(2deg);
+  width: 70px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  backdrop-filter: blur(2px);
+  z-index: 5;
+}
+
+.frame-polaroid .photo-caption-text {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  right: 14px;
+  font-family: 'Caveat', cursive;
+  font-size: 1.3rem;
+  color: #1e1b4b;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 2️⃣ FRAME STYLE: NEON GLOW */
+.frame-neon {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(10px);
+  padding: 14px;
+  border-radius: 20px;
+  border: 2px solid #a855f7;
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.4), inset 0 0 15px rgba(168, 85, 247, 0.2);
+  transform: rotate(1.5deg);
+}
+
+.frame-neon .photo-caption-text {
+  margin-top: 10px;
+  font-size: 0.95rem;
+  color: #d8b4fe;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* 3️⃣ FRAME STYLE: ROYAL VINTAGE GOLD */
+.frame-royal-gold {
+  background: #150d03;
+  padding: 16px;
+  border-radius: 6px;
+  border: 4px double #d4af37;
+  outline: 6px solid #855b0a;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 25px rgba(212, 175, 55, 0.35);
+  transform: rotate(-1deg);
+}
+
+.frame-royal-gold .photo-caption-text {
+  margin-top: 12px;
+  font-family: 'Playfair Display', serif;
+  font-size: 1.05rem;
+  color: #fde047;
+  font-style: italic;
+  text-align: center;
+}
+
+/* 4️⃣ FRAME STYLE: RETRO CINEMA FILMSTRIP */
+.frame-filmstrip {
+  background: #0f1115;
+  padding: 24px 14px;
+  border-radius: 8px;
+  border-left: 8px dashed rgba(255, 255, 255, 0.3);
+  border-right: 8px dashed rgba(255, 255, 255, 0.3);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
+  transform: rotate(2deg);
+}
+
+.frame-filmstrip .photo-caption-text {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  letter-spacing: 1px;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* 5️⃣ FRAME STYLE: ROMANTIC ROSE GOLD */
+.frame-rose-gold {
+  background: linear-gradient(145deg, #1c0d23, #2b0b2b);
+  padding: 14px;
+  border-radius: 20px;
+  border: 2px solid #fb7185;
+  box-shadow: 0 15px 35px rgba(244, 63, 94, 0.35);
+  transform: rotate(-1.5deg);
+}
+
+.frame-rose-gold .photo-caption-text {
+  margin-top: 10px;
+  font-size: 0.95rem;
+  color: #fecdd3;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* 6️⃣ FRAME STYLE: COSMIC HOLOGRAM */
+.frame-hologram {
+  background: rgba(8, 20, 44, 0.85);
+  padding: 14px;
+  border-radius: 18px;
+  border: 2px solid #06b6d4;
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.4), inset 0 0 15px rgba(6, 182, 212, 0.2);
+  transform: rotate(1deg);
+}
+
+.frame-hologram .photo-caption-text {
+  margin-top: 10px;
+  font-size: 0.95rem;
+  color: #67e8f9;
+  font-weight: 700;
+  text-align: center;
+}
+
+.photo-author-tag {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* 🎬 CINEMATIC FULLSCREEN LIGHTBOX */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(20px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+  padding: 20px;
+  animation: fadeIn 0.3s ease;
+}
+
+.lightbox-content {
+  position: relative;
+  max-width: 850px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lightbox-img-box {
+  width: 100%;
+  max-height: 70vh;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.9), 0 0 45px rgba(168, 85, 247, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.lightbox-img-box img {
+  width: 100%;
+  height: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  display: block;
+}
+
+.lightbox-info {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.lightbox-caption {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0 0 6px 0;
+}
+
+.lightbox-author {
+  font-size: 0.95rem;
+  color: #c084fc;
+}
+
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lightbox-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.lightbox-nav-btn.prev { left: -60px; }
+.lightbox-nav-btn.next { right: -60px; }
+
+@media (max-width: 768px) {
+  .lightbox-nav-btn.prev { left: 10px; }
+  .lightbox-nav-btn.next { right: 10px; }
+}
+
+/* Keyframes */
+@keyframes floatUpwardLeft {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); }
+  25% { transform: translateY(-35vh) translateX(-18px) rotate(-4deg); }
+  50% { transform: translateY(-70vh) translateX(12px) rotate(3deg); }
+  75% { transform: translateY(-105vh) translateX(-14px) rotate(-2deg); }
+  100% { transform: translateY(-145vh) translateX(8px) rotate(4deg); }
+}
+
+@keyframes floatUpwardRight {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); }
+  25% { transform: translateY(-35vh) translateX(20px) rotate(4deg); }
+  50% { transform: translateY(-70vh) translateX(-15px) rotate(-3deg); }
+  75% { transform: translateY(-105vh) translateX(16px) rotate(3deg); }
+  100% { transform: translateY(-145vh) translateX(-10px) rotate(-2deg); }
+}
+
+@keyframes floatUpwardCenter {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); }
+  33% { transform: translateY(-45vh) translateX(10px) rotate(2deg); }
+  66% { transform: translateY(-90vh) translateX(-12px) rotate(-3deg); }
+  100% { transform: translateY(-145vh) translateX(6px) rotate(2deg); }
 }
 
 @keyframes pulseGlow {
-  0%, 100% { opacity: 0.4; transform: scale(0.96); }
-  50% { opacity: 1; transform: scale(1.04); }
+  0%, 100% { opacity: 0.5; transform: scale(0.97); }
+  50% { opacity: 1; transform: scale(1.03); }
 }
 
 @keyframes popScale {
-  from { opacity: 0; transform: scale(0.6); }
+  from { opacity: 0; transform: scale(0.7); }
   to { opacity: 1; transform: scale(1); }
 }
 
