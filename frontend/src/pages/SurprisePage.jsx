@@ -47,7 +47,6 @@ const DEMO_PHOTOS = [
   { id: 'demo-p4', type: 'photo', media_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop', caption: 'Shining Bright Today & Always 🌟', sender_name: 'Secret Admirer' }
 ];
 
-// 🧸 Pure Cute Teddy Bear GIFs (Idle & Talking)
 const TEDDY_IDLE = "/gifs/teddy_idle.gif"; 
 const TEDDY_TALKING = "/gifs/teddy_talking.gif";
 
@@ -124,24 +123,70 @@ export default function SurprisePage() {
   const [selectedContribution, setSelectedContribution] = useState(null);
   const [revealedIds, setRevealedIds] = useState(new Set());
 
-  // Slideshow State
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [activeLightbox, setActiveLightbox] = useState(false);
   const [showWishesModal, setShowWishesModal] = useState(false);
 
-  // 🎙️ Audio Stage State
   const [currentAudioIndex, setCurrentAudioIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
 
+  const [giftsList, setGiftsList] = useState([]);
+  const [selectedGiftIndex, setSelectedGiftIndex] = useState(null);
+  const [giftViewState, setGiftViewState] = useState('grid');
+  const [openedGifts, setOpenedGifts] = useState(new Set());
+
+  // ✉️ Letters State
+  const [lettersList, setLettersList] = useState([]);
+  const [currentLetterIdx, setCurrentLetterIdx] = useState(0);
+  const [isLetterOpened, setIsLetterOpened] = useState(false);
+  const [displayedLetterText, setDisplayedLetterText] = useState('');
+
   const balloonCountRef = useRef(0);
+
+  // Helper to resolve Sender Name across schema variations
+  const getUserName = useCallback((c) => {
+    if (!c) return 'Special Friend';
+    return c.sender_name || c.user?.name || c.user?.username || c.sender || 'Special Friend';
+  }, []);
 
   useEffect(() => {
     const fetchSurprise = async () => {
       try {
         const res = await API.get(`/rooms/public/surprise/${slug}`);
         if (res.data?.status === 'success') {
-          setRoomData(res.data.data);
+          const data = res.data.data;
+          setRoomData(data);
+
+          const rawItems = data.contributions || [];
+
+          // 1. Gift Boxes Filter
+          const videoItems = rawItems.filter(c => c.type === 'video' || (c.media_url && c.media_url.match(/\.(mp4|webm|mov)$/i)));
+          const giftBoxes = (videoItems.length > 0 ? videoItems : rawItems).map((item, idx) => ({
+            id: item.id || `gift-${idx}`,
+            title: `Gift Box #${idx + 1}`,
+            sender: getUserName(item),
+            textMessage: item.content || item.caption || "Sending lots of love and best wishes on your special day! ✨",
+            videoUrl: item.type === 'video' || item.media_url?.match(/\.(mp4|webm|mov)$/i) ? item.media_url : null,
+            icon: ['🎁', '🎉', '🎀', '🎈', '⭐', '🎂'][idx % 6]
+          }));
+          setGiftsList(giftBoxes);
+
+          // 2. Strict Letters Filter (Only items explicitly created as letters)
+          const strictLetters = rawItems.filter(c => c.type === 'letter' || c.is_letter === true);
+
+          if (strictLetters.length > 0) {
+            setLettersList(strictLetters);
+          } else {
+            // Fallback: If no explicit letters, fallback to room text or default letter
+            const fallbackContent = data.letter_text || "Dearest Friend,\n\nMay your special day be filled with endless joy, laughter, and magical moments! Wishing you all the happiness in the world today and always. Happy Birthday! ❤️";
+            setLettersList([{
+              id: 'fallback-letter',
+              type: 'letter',
+              content: fallbackContent,
+              sender_name: 'Well Wisher'
+            }]);
+          }
         }
       } catch (err) {
         console.error("Error fetching room:", err);
@@ -150,7 +195,29 @@ export default function SurprisePage() {
       }
     };
     if (slug) fetchSurprise();
-  }, [slug]);
+  }, [slug, getUserName]);
+
+  // Typewriter effect triggered when letter opens or switches
+  useEffect(() => {
+    if (stage === 'letter' && isLetterOpened && lettersList.length > 0) {
+      const activeLetter = lettersList[currentLetterIdx];
+      const fullText = activeLetter?.content || activeLetter?.text || activeLetter?.caption || '';
+      
+      let index = 0;
+      setDisplayedLetterText('');
+      
+      const timer = setInterval(() => {
+        if (index < fullText.length) {
+          setDisplayedLetterText((prev) => prev + fullText.charAt(index));
+          index++;
+        } else {
+          clearInterval(timer);
+        }
+      }, 35);
+
+      return () => clearInterval(timer);
+    }
+  }, [stage, isLetterOpened, currentLetterIdx, lettersList]);
 
   const getTextContributions = useCallback(() => {
     return (roomData?.contributions || []).filter(
@@ -160,7 +227,7 @@ export default function SurprisePage() {
 
   const getPhotoContributions = useCallback(() => {
     const photos = (roomData?.contributions || []).filter(
-      c => (c.type === 'photo' || c.type === 'image' || (!c.type && c.media_url)) && c.media_url
+      c => (c.type === 'photo' || c.type === 'image' || (!c.type && c.media_url)) && c.media_url && !c.media_url.match(/\.(mp4|webm|mov|mp3|wav|m4a)$/i)
     );
     return photos.length > 0 ? photos : DEMO_PHOTOS;
   }, [roomData]);
@@ -268,10 +335,6 @@ export default function SurprisePage() {
     }
   };
 
-  const getUserName = (c) => {
-    return c?.sender_name || c?.user?.name || c?.user?.username || 'Special Guest';
-  };
-
   const handleBalloonBurst = (balloon, event) => {
     if (balloon.isPopping) return;
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -341,6 +404,49 @@ export default function SurprisePage() {
     const audios = getAudioContributions();
     if (currentAudioIndex < audios.length - 1) {
       setCurrentAudioIndex(prev => prev + 1);
+    }
+  };
+
+  const handleOpenGiftBox = (index) => {
+    playPopSound();
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+
+    setOpenedGifts(prev => new Set([...prev, index]));
+    setSelectedGiftIndex(index);
+    setGiftViewState('video_player');
+  };
+
+  const handleNextGift = () => {
+    if (selectedGiftIndex !== null && selectedGiftIndex < giftsList.length - 1) {
+      const nextIdx = selectedGiftIndex + 1;
+      setSelectedGiftIndex(nextIdx);
+      setOpenedGifts(prev => new Set([...prev, nextIdx]));
+      setGiftViewState('video_player');
+    } else {
+      setStage('letter');
+    }
+  };
+
+  const handleOpenLetter = () => {
+    playPopSound();
+    confetti({
+      particleCount: 100,
+      spread: 90,
+      origin: { y: 0.5 }
+    });
+    setIsLetterOpened(true);
+  };
+
+  const handleNextLetter = () => {
+    playPopSound();
+    if (currentLetterIdx < lettersList.length - 1) {
+      setCurrentLetterIdx(prev => prev + 1);
+    } else {
+      setStage('celebration');
     }
   };
 
@@ -421,7 +527,7 @@ export default function SurprisePage() {
     );
   }
 
-  // 4️⃣ Cinematic 3-2-1 Countdown Stage
+  // 4️⃣ Countdown
   if (stage === 'countdown') {
     return (
       <div className="surprise-app-wrapper cinematic-countdown-wrapper">
@@ -438,7 +544,7 @@ export default function SurprisePage() {
     );
   }
 
-  // 5️⃣ 🖼️ ONE-BY-ONE CINEMATIC PHOTO GALLERY
+  // 5️⃣ Photo Gallery Stage
   if (stage === 'photo_gallery') {
     const photos = getPhotoContributions();
     const currentPhoto = photos[currentPhotoIndex] || photos[0];
@@ -447,7 +553,6 @@ export default function SurprisePage() {
 
     return (
       <div className="surprise-app-wrapper slideshow-realm">
-        {/* Header */}
         <div className="gallery-header-section" style={{ marginBottom: '10px' }}>
           <span className="gallery-badge">📸 Memory Gallery</span>
           <h1 className="gallery-main-title">Unforgettable Moments ✨</h1>
@@ -456,7 +561,6 @@ export default function SurprisePage() {
           </span>
         </div>
 
-        {/* Center Stage Card Slider */}
         <div className="slideshow-stage">
           <button className="nav-arrow-btn" onClick={prevPhoto} aria-label="Previous Photo">❮</button>
 
@@ -467,7 +571,15 @@ export default function SurprisePage() {
               onClick={() => setActiveLightbox(true)}
             >
               <div className="photo-img-wrapper">
-                <img className="slideshow-photo-img" src={rawUrl} alt={currentPhoto.caption || "Memory"} />
+                <img 
+                  className="slideshow-photo-img" 
+                  src={rawUrl} 
+                  alt={currentPhoto.caption || "Memory"} 
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = DEMO_PHOTOS[0].media_url;
+                  }}
+                />
               </div>
               <div className="photo-caption-text">{currentPhoto.caption || "Sweet Memory Together"}</div>
               <div className="photo-author-tag">— {getUserName(currentPhoto)}</div>
@@ -477,7 +589,6 @@ export default function SurprisePage() {
           <button className="nav-arrow-btn" onClick={nextPhoto} aria-label="Next Photo">❯</button>
         </div>
 
-        {/* Bottom Controls */}
         <div>
           <div className="slideshow-dots-bar">
             {photos.map((_, idx) => (
@@ -499,12 +610,18 @@ export default function SurprisePage() {
           </div>
         </div>
 
-        {/* Lightbox Modal */}
         {activeLightbox && (
           <div className="lightbox-overlay" onClick={() => setActiveLightbox(false)}>
             <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
               <div className="lightbox-img-box">
-                <img src={rawUrl} alt="Enlarged Memory" />
+                <img 
+                  src={rawUrl} 
+                  alt="Enlarged Memory" 
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = DEMO_PHOTOS[0].media_url;
+                  }}
+                />
               </div>
               <div className="lightbox-info">
                 <p className="lightbox-caption">"{currentPhoto.caption || 'Sweet Memory'}"</p>
@@ -517,7 +634,6 @@ export default function SurprisePage() {
           </div>
         )}
 
-        {/* Wishes Modal */}
         {showWishesModal && (
           <div className="message-modal-overlay" onClick={() => setShowWishesModal(false)}>
             <div className="message-card" onClick={(e) => e.stopPropagation()}>
@@ -537,7 +653,7 @@ export default function SurprisePage() {
     );
   }
 
-  // 6️⃣ 🎙️ CARTOON TALKING AUDIO STAGE
+  // 6️⃣ Audio Stage
   if (stage === 'audio_gallery') {
     const audioList = getAudioContributions();
     const currentAudio = audioList[currentAudioIndex];
@@ -550,7 +666,6 @@ export default function SurprisePage() {
           <h1 className="gallery-main-title">Teddy Has Something To Say! ✨</h1>
         </div>
 
-        {/* 🧸 Talking Teddy Stage */}
         <div className="teddy-container">
           <img 
             src={isPlaying ? TEDDY_TALKING : TEDDY_IDLE} 
@@ -567,7 +682,6 @@ export default function SurprisePage() {
           />
         </div>
 
-        {/* 🎵 Audio Player Card */}
         <div className="audio-controls-card">
           <p className="audio-speaker-tag">
             🗣️ Message from: <strong>{getUserName(currentAudio)}</strong>
@@ -605,14 +719,262 @@ export default function SurprisePage() {
           )}
         </div>
 
-        <button className="queue-btn" onClick={() => setStage('celebration')}>
-          Final Celebration 🎁
+        <button className="queue-btn" onClick={() => setStage('gifts_grid')}>
+          Open Secret Gift Boxes 🎁✨
         </button>
       </div>
     );
   }
 
-  // 7️⃣ Final Celebration Stage
+  // 7️⃣ Gift Boxes Grid Stage
+  if (stage === 'gifts_grid') {
+    const activeGift = selectedGiftIndex !== null ? giftsList[selectedGiftIndex] : null;
+
+    return (
+      <div className="surprise-app-wrapper sky-realm" style={{ padding: '20px' }}>
+        {giftViewState === 'grid' && (
+          <div style={{ textAlign: 'center', maxWidth: '800px', margin: '0 auto' }}>
+            <h1 className="gallery-main-title" style={{ marginBottom: '10px' }}>
+              🎁 Tap a Gift Box to Watch Video Surprise! ✨
+            </h1>
+            <p style={{ color: '#cbd5e1', marginBottom: '30px' }}>
+              Click any gift box to directly play its video message!
+            </p>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+              gap: '20px',
+              justifyContent: 'center'
+            }}>
+              {giftsList.map((gift, index) => {
+                const isOpened = openedGifts.has(index);
+
+                return (
+                  <div
+                    key={gift.id}
+                    onClick={() => handleOpenGiftBox(index)}
+                    style={{
+                      background: isOpened ? 'rgba(30, 41, 59, 0.8)' : 'rgba(15, 23, 42, 0.9)',
+                      border: isOpened ? '2px solid #a855f7' : '2px solid rgba(236, 72, 153, 0.5)',
+                      borderRadius: '20px',
+                      padding: '25px 15px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      boxShadow: isOpened ? '0 0 15px rgba(168, 85, 247, 0.4)' : '0 8px 20px rgba(0,0,0,0.4)',
+                      textAlign: 'center'
+                    }}
+                  >
+                    <div style={{
+                      fontSize: '4rem',
+                      animation: isOpened ? 'none' : 'bounce 1.5s infinite alternate'
+                    }}>
+                      {isOpened ? '🔓' : gift.icon}
+                    </div>
+
+                    <h3 style={{ color: '#fff', marginTop: '10px', fontSize: '1.1rem' }}>
+                      {gift.title}
+                    </h3>
+
+                    <p style={{ color: '#a855f7', fontSize: '0.85rem', marginTop: '4px' }}>
+                      From: {gift.sender}
+                    </p>
+
+                    <span style={{
+                      display: 'inline-block',
+                      marginTop: '12px',
+                      fontSize: '0.75rem',
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      background: isOpened ? '#334155' : '#ec4899',
+                      color: '#fff'
+                    }}>
+                      {isOpened ? 'Watched 🎬' : 'Watch Video 🎬'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button 
+              className="queue-btn" 
+              style={{ marginTop: '35px' }} 
+              onClick={() => setStage('letter')}
+            >
+              Open Special Gift Letters 💌
+            </button>
+          </div>
+        )}
+
+        {giftViewState === 'video_player' && activeGift && (
+          <div className="surprise-app-wrapper intro-container">
+            <div style={{ width: '100%', maxWidth: '520px', margin: '0 auto', textAlign: 'center' }}>
+              <span className="gallery-badge">🎬 {activeGift.title} Video Surprise</span>
+              
+              <h2 style={{ margin: '10px 0', color: '#fff' }}>
+                Special Wish from {activeGift.sender}
+              </h2>
+
+              {activeGift.videoUrl ? (
+                <video
+                  key={activeGift.id}
+                  src={getMediaUrl(activeGift.videoUrl)}
+                  controls
+                  autoPlay
+                  onEnded={handleNextGift}
+                  style={{
+                    width: '100%',
+                    maxHeight: '380px',
+                    borderRadius: '20px',
+                    boxShadow: '0 12px 35px rgba(168, 85, 247, 0.5)',
+                    border: '2px solid #ec4899',
+                    margin: '15px 0'
+                  }}
+                />
+              ) : (
+                <div style={{ padding: '40px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '20px', margin: '15px 0' }}>
+                  <p style={{ color: '#cbd5e1' }}>🎥 No Video Attached for this Gift Box!</p>
+                  <p style={{ fontStyle: 'italic', color: '#a855f7', marginTop: '10px' }}>
+                    "{activeGift.textMessage}"
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '15px' }}>
+                <button 
+                  className="queue-btn" 
+                  style={{ background: 'rgba(255,255,255,0.15)' }}
+                  onClick={() => setGiftViewState('grid')}
+                >
+                  🏠 All Gift Boxes
+                </button>
+
+                <button className="queue-btn" onClick={handleNextGift}>
+                  {selectedGiftIndex < giftsList.length - 1 ? 'Next Gift Video 🎬 ❯' : 'Open Special Letters 💌 ❯'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 8️⃣ 💌 STRICT LETTER SHOWCASE (TYPEWRITER + ACCURATE USER NAME AT BOTTOM)
+  if (stage === 'letter') {
+    const activeLetter = lettersList[currentLetterIdx] || lettersList[0];
+    const letterSender = getUserName(activeLetter);
+
+    return (
+      <div className="surprise-app-wrapper intro-container" style={{ padding: '20px' }}>
+        {!isLetterOpened ? (
+          /* CLOSED ENVELOPE STAGE */
+          <div style={{ textAlign: 'center' }}>
+            <h1 className="gallery-main-title" style={{ marginBottom: '15px' }}>
+              💌 Special Birthday Letters
+            </h1>
+            <p style={{ color: '#cbd5e1', marginBottom: '35px' }}>
+              Tap the envelope to open and read secret letters ✨
+            </p>
+
+            <div 
+              onClick={handleOpenLetter}
+              style={{
+                width: '280px',
+                height: '200px',
+                margin: '0 auto',
+                background: 'linear-gradient(135deg, #f43f5e, #ec4899)',
+                borderRadius: '20px',
+                border: '3px solid #fbcfe8',
+                boxShadow: '0 15px 35px rgba(236, 72, 153, 0.4)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              <div style={{ fontSize: '5rem', filter: 'drop-shadow(0 5px 10px rgba(0,0,0,0.2))' }}>
+                💌
+              </div>
+              <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '5px' }}>
+                Tap to Open ({lettersList.length} Letters)
+              </span>
+            </div>
+          </div>
+        ) : (
+          /* OPENED LETTER STAGE */
+          <div style={{ maxWidth: '580px', width: '100%', margin: '0 auto', textAlign: 'center' }}>
+            
+            <div style={{ marginBottom: '15px' }}>
+              <span className="photo-counter-badge">
+                Letter {currentLetterIdx + 1} of {lettersList.length}
+              </span>
+            </div>
+
+            <div style={{
+              background: '#fef3c7',
+              color: '#451a03',
+              padding: '35px 25px 20px 25px',
+              borderRadius: '20px',
+              border: '2px solid #f59e0b',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+              textAlign: 'left',
+              minHeight: '280px',
+              fontFamily: '"Georgia", serif',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between'
+            }}>
+              <div>
+                <div style={{ fontSize: '2rem', textAlign: 'center', marginBottom: '15px' }}>📜✨</div>
+                
+                {/* Typewriter Effect Content */}
+                <div style={{ 
+                  fontSize: '1.15rem', 
+                  lineHeight: '1.8', 
+                  whiteSpace: 'pre-line',
+                  borderLeft: '3px solid #f59e0b',
+                  paddingLeft: '15px'
+                }}>
+                  {displayedLetterText}
+                  <span style={{ fontWeight: 'bold', color: '#d97706', animation: 'blink 0.8s infinite' }}>|</span>
+                </div>
+              </div>
+
+              {/* Exact User / Sender Name rendering at Bottom */}
+              <div style={{
+                textAlign: 'right',
+                marginTop: '25px',
+                paddingTop: '15px',
+                borderTop: '1px dashed #d97706',
+                fontStyle: 'italic',
+                fontWeight: 'bold',
+                fontSize: '1.1rem',
+                color: '#78350f'
+              }}>
+                — From: {letterSender} ❤️
+              </div>
+            </div>
+
+            {/* Letter Navigation Buttons */}
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '25px' }}>
+              <button 
+                className="queue-btn"
+                onClick={handleNextLetter}
+              >
+                {currentLetterIdx < lettersList.length - 1 ? 'Next Letter 💌 ❯' : 'Finish Celebration 🎉'}
+              </button>
+            </div>
+
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 9️⃣ Final Celebration Stage
   return (
     <div className="surprise-app-wrapper intro-container">
       <h1 style={{ fontSize: '3rem', marginBottom: '20px' }}>🎉 Happy Birthday! 🎉</h1>
