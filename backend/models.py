@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -11,7 +12,7 @@ class User(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(150), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    profile_photo = Column(String(255), nullable=True)
+    profile_photo = Column(Text().with_variant(LONGTEXT(), "mysql"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -49,7 +50,7 @@ class Contribution(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     type = Column(String(50), nullable=True) # 'text', 'photo', 'video', 'audio', 'memory', 'letter'
     content = Column(Text, nullable=True) # Text message or letter content
-    media_url = Column(String(255), nullable=True) # Image/Audio/Video file path
+    media_url = Column(Text().with_variant(LONGTEXT(), "mysql"), nullable=True) # Base64 data URL or legacy upload path
     caption = Column(String(255), nullable=True)
     # Default-a 'approved' nu tharlaam, or admin review-ku 'pending' nu tharlaam
     status = Column(String(20), default="pending")

@@ -1,12 +1,14 @@
 import os
-import shutil
+import base64
+import mimetypes
 import random
 import string
 from fastapi import FastAPI, HTTPException, Depends, Form, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, text
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import Session
-from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models
 import bcrypt
@@ -33,10 +35,7 @@ app = FastAPI(
     title="Collaborative Surprise Platform API"
 )
 
-# 🔴 SEPARATE DIRECTORY FOR PROFILES
-PROFILE_DIR = "uploads/profiles"
-os.makedirs(PROFILE_DIR, exist_ok=True) # Directory automatic-a create aagidum
-# Uploads folder setup
+# Keep serving media uploaded before Base64 storage was introduced.
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -45,6 +44,53 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # ============================================================
 
 models.Base.metadata.create_all(bind=engine)
+
+if engine.dialect.name == "mysql":
+    media_columns = {
+        "users": "profile_photo",
+        "contributions": "media_url",
+    }
+    inspector = inspect(engine)
+    columns_to_widen = []
+    for table_name, column_name in media_columns.items():
+        column = next(
+            item for item in inspector.get_columns(table_name)
+            if item["name"] == column_name
+        )
+        if not isinstance(column["type"], LONGTEXT):
+            columns_to_widen.append((table_name, column_name))
+
+    if columns_to_widen:
+        with engine.begin() as connection:
+            for table_name, column_name in columns_to_widen:
+                connection.execute(text(
+                    f"ALTER TABLE `{table_name}` MODIFY COLUMN `{column_name}` LONGTEXT NULL"
+                ))
+
+
+async def upload_as_data_url(file: UploadFile) -> str:
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    media_type = (
+        file.content_type
+        or mimetypes.guess_type(file.filename or "")[0]
+        or "application/octet-stream"
+    )
+    encoded_contents = base64.b64encode(contents).decode("ascii")
+    return f"data:{media_type};base64,{encoded_contents}"
+
+
+def remove_legacy_upload(media_url: str | None) -> None:
+    prefix = "/uploads/"
+    if not media_url or not media_url.startswith(prefix):
+        return
+
+    uploads_root = os.path.realpath("uploads")
+    file_path = os.path.realpath(os.path.join(uploads_root, media_url[len(prefix):]))
+    if os.path.commonpath([uploads_root, file_path]) == uploads_root and os.path.isfile(file_path):
+        os.remove(file_path)
 
 # ============================================================
 # CORS Configuration
@@ -184,24 +230,9 @@ async def upload_profile_photo(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Old photo delete
-    if hasattr(user, 'profile_photo') and user.profile_photo:
-        old_path = user.profile_photo.lstrip("/")
-        if os.path.exists(old_path):
-            try:
-                os.remove(old_path)
-            except Exception as e:
-                print("Error removing file:", e)
-
-    # Save new photo
-    file_ext = os.path.splitext(file.filename)[1]
-    unique_filename = f"{uuid.uuid4().hex}{file_ext}"
-    file_path = os.path.join(PROFILE_DIR, unique_filename)
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    user.profile_photo = f"/uploads/profiles/{unique_filename}"
+    profile_photo = await upload_as_data_url(file)
+    remove_legacy_upload(user.profile_photo)
+    user.profile_photo = profile_photo
     db.commit()
     db.refresh(user)
 
@@ -240,45 +271,6 @@ def change_password(data: dict, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "success", "message": "Password changed successfully!"}
-
-
-async def upload_profile_photo(
-    user_id: int = Form(...),
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Delete old profile photo if exists
-    if user.profile_photo:
-        old_path = user.profile_photo.lstrip("/")
-        if os.path.exists(old_path):
-            os.remove(old_path)
-
-    # Save to uploads/profiles directory with Unique UUID
-    unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
-    file_path = os.path.join(PROFILE_DIR, unique_filename)
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    user.profile_photo = f"/uploads/profiles/{unique_filename}"
-    db.commit()
-    db.refresh(user)
-
-    return {
-        "status": "success",
-        "message": "Profile photo updated!",
-        "profile_photo": user.profile_photo,
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "profile_photo": user.profile_photo
-        }
-    }   
 
 
 # ============================================================
@@ -495,20 +487,7 @@ async def add_contribution(
     file: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
-    saved_url = None
-    
-    if file:
-        # 1. Unique ID generate panni filename-ku munnadi add panrom
-        unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
-        
-        # 2. Uploads folder path
-        file_path = f"uploads/{unique_filename}"
-        
-        # 3. Save file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        saved_url = f"/uploads/{unique_filename}"
+    saved_url = await upload_as_data_url(file) if file else None
 
     new_item = models.Contribution(
         room_id=room_id,
@@ -551,11 +530,7 @@ def delete_contribution(
     if item.user_id != user_id:
         raise HTTPException(status_code=403, detail="Permission denied! You can only delete your own items.")
     
-    # File Cleanup
-    if item.media_url:
-        actual_path = item.media_url.lstrip("/")
-        if os.path.exists(actual_path):
-            os.remove(actual_path)
+    remove_legacy_upload(item.media_url)
 
     db.delete(item)
     db.commit()
@@ -587,16 +562,9 @@ async def update_contribution(
 
     # New file update logic
     if file:
-        if item.media_url:
-            old_path = item.media_url.lstrip("/")
-            if os.path.exists(old_path):
-                os.remove(old_path)
-
-        unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
-        file_path = f"uploads/{unique_filename}"
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        item.media_url = f"/uploads/{unique_filename}"
+        media_url = await upload_as_data_url(file)
+        remove_legacy_upload(item.media_url)
+        item.media_url = media_url
 
     db.commit()
     db.refresh(item)

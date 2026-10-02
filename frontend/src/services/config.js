@@ -20,7 +20,14 @@ export const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_BASE_URL || 'http://loc
  */
 export function getMediaUrl(path) {
   if (!path) return '';
+  if (path.startsWith('data:')) return path;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `${MEDIA_BASE_URL}${cleanPath}`;
+}
+
+export function saveUserSession(user) {
+  const sessionUser = { ...user };
+  delete sessionUser.profile_photo;
+  localStorage.setItem('user', JSON.stringify(sessionUser));
 }

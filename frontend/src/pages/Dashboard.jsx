@@ -3,7 +3,7 @@ import CreateRoomModal from '../components/CreateRoomModal';
 import { useNavigate } from 'react-router-dom';
 import JoinRoomModal from '../components/JoinRoomModal';
 import API from '../services/api';
-import { getMediaUrl } from '../services/config';
+import { getMediaUrl, saveUserSession } from '../services/config';
 
 export default function Dashboard({ currentUser, onLogout }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -22,7 +22,7 @@ useEffect(() => {
       const res = await API.get(`/users/${currentUser.id}`);
       if (res.data.status === 'success') {
         setUserState(res.data.user); // DB Fresh Data State Update
-        localStorage.setItem('user', JSON.stringify(res.data.user)); // Local Storage Sync
+        saveUserSession(res.data.user);
       }
     } catch (err) {
       console.error("Error fetching user data:", err);
@@ -70,7 +70,7 @@ useEffect(() => {
       if (res.data.status === 'success') {
         const updatedUser = res.data.user;
         setUserState(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser)); // Session sync
+        saveUserSession(updatedUser);
         alert('Profile photo updated successfully!');
       }
     } catch (err) {
