@@ -24,9 +24,15 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# PyMySQL Aiven SSL Fix:
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"ssl": {"check_hostname": False}}
+    connect_args={
+        "ssl": {
+            "check_hostname": False,
+            "verify_mode": False
+        }
+    }
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
