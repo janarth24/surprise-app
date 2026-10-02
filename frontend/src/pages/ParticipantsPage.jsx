@@ -154,7 +154,7 @@ export default function ParticipantsPage({ currentUser }) {
 
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0b0f12', color: '#fff', padding: '30px 5%' }}>
+    <div className="animated-page-root" style={{ minHeight: '100vh', color: '#fff', padding: '30px 5%' }}>
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '30px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
         <button 

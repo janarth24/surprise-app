@@ -26,7 +26,7 @@ export default function RoomDetails({ currentUser }) {
     { id: 'photo', label: '🖼️ Photos' },
     { id: 'video', label: '🎥 Videos' },
     { id: 'audio', label: '🎙️ Audio Notes' },
-    { id: 'memory', label: '🌟 Memories' },
+    // { id: 'memory', label: '🌟 Memories' },
     { id: 'letter', label: '✉️ Secret Letter' },
   ];
 
@@ -129,7 +129,7 @@ const handleSubmit = async (e) => {
 };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0b0f12', color: '#fff' }}>
+    <div className="animated-page-root" style={{ minHeight: '100vh', color: '#fff' }}>
       
       {/* NAVBAR */}
       <nav style={{ display: 'flex', justifyContent: 'space-between', padding: '15px 5%', background: '#121619' }}>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
+import { Volume2, VolumeX } from 'lucide-react';
 import API from '../services/api';
 import { getMediaUrl } from '../services/config';
 import './SurprisePage.css';
@@ -20,15 +21,6 @@ const BALLOON_COLORS = [
   'linear-gradient(135deg, #f59e0b, #ef4444)'
 ];
 
-const FRAME_CLASSES = [
-  'frame-polaroid',
-  'frame-neon',
-  'frame-royal-gold',
-  'frame-filmstrip',
-  'frame-rose-gold',
-  'frame-hologram'
-];
-
 const SCREEN_LANES = [
   { min: 4, max: 16, sway: 'sway-left' },
   { min: 19, max: 32, sway: 'sway-right' },
@@ -39,6 +31,15 @@ const SCREEN_LANES = [
 ];
 
 const INITIAL_DELAYS = [-2, -7, -12, -4, -9, -14];
+
+const SEGMENT_INTROS = {
+  sky: { eyebrow: 'A little magic is in the air', title: 'Messages from your people', subtitle: 'Pop a balloon and discover a birthday wish.', icon: '🎈' },
+  photo_gallery: { eyebrow: 'The memory reel', title: 'Moments worth keeping', subtitle: 'A little look back at all the reasons to smile.', icon: '📸' },
+  audio_gallery: { eyebrow: 'A voice just for you', title: 'Listen close', subtitle: 'Your favorite people have something to say.', icon: '🎙️' },
+  gifts_grid: { eyebrow: 'Made with love', title: 'A gift for every smile', subtitle: 'Open each box to reveal a video surprise.', icon: '🎁' },
+  letter: { eyebrow: 'A few words from the heart', title: 'Letters for your birthday', subtitle: 'Every note is a little reminder of how loved you are.', icon: '💌' },
+  celebration: { eyebrow: 'The moment we have been waiting for', title: 'Make a birthday wish', subtitle: 'The candles are yours to blow out.', icon: '🎂' }
+};
 
 const DEMO_PHOTOS = [
   { id: 'demo-p1', type: 'photo', media_url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=800&auto=format&fit=crop', caption: 'Magical Celebration Moments ✨', sender_name: 'Best Friends' },
@@ -106,6 +107,15 @@ const playPopSound = () => {
   }
 };
 
+const shuffleArray = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
 export default function SurprisePage() {
   const { slug } = useParams();
 
@@ -113,6 +123,9 @@ export default function SurprisePage() {
   const [roomData, setRoomData] = useState(null);
   
   const [stage, setStage] = useState('lock');
+  const [segmentIntro, setSegmentIntro] = useState(null);
+  const [cakeCut, setCakeCut] = useState(false);
+  const segmentIntroTimer = useRef(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
   
@@ -129,7 +142,9 @@ export default function SurprisePage() {
 
   const [currentAudioIndex, setCurrentAudioIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isBackgroundMusicMuted, setIsBackgroundMusicMuted] = useState(false);
   const audioRef = useRef(null);
+  const backgroundMusicRef = useRef(null);
 
   const [giftsList, setGiftsList] = useState([]);
   const [selectedGiftIndex, setSelectedGiftIndex] = useState(null);
@@ -150,19 +165,42 @@ export default function SurprisePage() {
     return c.sender_name || c.user?.name || c.user?.username || c.sender || 'Special Friend';
   }, []);
 
+  const startSegmentIntro = useCallback((intro) => {
+    window.clearTimeout(segmentIntroTimer.current);
+    setSegmentIntro(intro);
+    segmentIntroTimer.current = window.setTimeout(() => setSegmentIntro(null), 1650);
+  }, []);
+
+  const transitionToStage = useCallback((nextStage, intro = SEGMENT_INTROS[nextStage]) => {
+    if (intro) startSegmentIntro(intro);
+    setStage(nextStage);
+  }, [startSegmentIntro]);
+
+  useEffect(() => () => window.clearTimeout(segmentIntroTimer.current), []);
+
+  useEffect(() => () => {
+    const backgroundMusic = backgroundMusicRef.current;
+    if (backgroundMusic) {
+      backgroundMusic.pause();
+      backgroundMusic.currentTime = 0;
+      backgroundMusicRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     const fetchSurprise = async () => {
       try {
         const res = await API.get(`/rooms/public/surprise/${slug}`);
         if (res.data?.status === 'success') {
-          const data = res.data.data;
-          setRoomData(data);
+         const data = res.data.data;
+const shuffledItems = shuffleArray(data.contributions || []);
+setRoomData({ ...data, contributions: shuffledItems });
 
-          const rawItems = data.contributions || [];
+const rawItems = shuffledItems;
 
           // 1. Gift Boxes Filter
           const videoItems = rawItems.filter(c => c.type === 'video' || (c.media_url && c.media_url.match(/\.(mp4|webm|mov)$/i)));
-          const giftBoxes = (videoItems.length > 0 ? videoItems : rawItems).map((item, idx) => ({
+          const giftBoxes = videoItems.map((item, idx) => ({
             id: item.id || `gift-${idx}`,
             title: `Gift Box #${idx + 1}`,
             sender: getUserName(item),
@@ -260,14 +298,14 @@ export default function SurprisePage() {
   }, []);
 
   const initializeBalloons = useCallback(() => {
-    setStage('sky');
+    transitionToStage('sky');
     const contributions = getTextContributions();
     if (contributions.length === 0) {
       setBalloons([]);
       return;
     }
 
-    const unrevealedItems = contributions.filter(c => !revealedIds.has(c.id));
+    const unrevealedItems = contributions.filter(item => !revealedIds.has(item.id));
     if (unrevealedItems.length === 0) {
       setBalloons([]);
       return;
@@ -279,7 +317,7 @@ export default function SurprisePage() {
     });
 
     setBalloons(initialBalloons);
-  }, [getTextContributions, revealedIds, createBalloonObj]);
+  }, [transitionToStage, getTextContributions, revealedIds, createBalloonObj]);
 
   useEffect(() => {
     if (stage === 'teaser') {
@@ -319,21 +357,59 @@ export default function SurprisePage() {
           origin: { x: 0.5, y: 0.5 },
           colors: ['#ec4899', '#a855f7', '#f59e0b', '#06b6d4', '#ffffff']
         });
-        setStage('photo_gallery');
+        transitionToStage('photo_gallery');
       }, 3000);
 
       return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }
-  }, [stage]);
+  }, [stage, transitionToStage]);
 
   const handleUnlock = (e) => {
     e.preventDefault();
     if (!roomData?.gift_password || passwordInput.trim() === String(roomData.gift_password).trim()) {
+      if (!backgroundMusicRef.current) {
+        const backgroundMusic = new Audio('/audio/audio.mp3');
+        backgroundMusic.loop = true;
+        backgroundMusic.volume = 0.35;
+        backgroundMusic.muted = isBackgroundMusicMuted;
+        backgroundMusicRef.current = backgroundMusic;
+        backgroundMusic.play().catch((error) => {
+          console.error('Could not play birthday background music:', error);
+        });
+      }
       setStage('teaser');
     } else {
       setAuthError('❌ Incorrect Secret Password!');
     }
   };
+
+  const handleToggleBackgroundMusic = () => {
+    const nextMuted = !isBackgroundMusicMuted;
+    setIsBackgroundMusicMuted(nextMuted);
+    const backgroundMusic = backgroundMusicRef.current;
+    if (!backgroundMusic) return;
+
+    backgroundMusic.muted = nextMuted;
+    if (!nextMuted && backgroundMusic.paused) {
+      backgroundMusic.play().catch((error) => {
+        console.error('Could not resume birthday background music:', error);
+      });
+    }
+  };
+
+  const renderBackgroundMusicToggle = () => (
+    <button
+      className="background-music-toggle"
+      type="button"
+      onClick={handleToggleBackgroundMusic}
+      aria-label={isBackgroundMusicMuted ? 'Unmute background music' : 'Mute background music'}
+      aria-pressed={isBackgroundMusicMuted}
+      title={isBackgroundMusicMuted ? 'Unmute music' : 'Mute music'}
+    >
+      {isBackgroundMusicMuted ? <VolumeX size={19} /> : <Volume2 size={19} />}
+      <span>{isBackgroundMusicMuted ? 'Unmute' : 'Mute'}</span>
+    </button>
+  );
 
   const handleBalloonBurst = (balloon, event) => {
     if (balloon.isPopping) return;
@@ -361,20 +437,16 @@ export default function SurprisePage() {
       setSelectedContribution(balloon.contribution);
       const newRevealed = new Set([...revealedIds, balloon.contribution.id]);
       setRevealedIds(newRevealed);
-
       setBalloons((prev) => {
         const remaining = prev.filter((b) => b.id !== balloon.id);
         const allItems = getTextContributions();
-        const activeIds = new Set(remaining.map(b => b.contribution.id));
-        const availableUnrevealed = allItems.filter(
-          item => !newRevealed.has(item.id) && !activeIds.has(item.id)
+        const activeIds = new Set(remaining.map((b) => b.contribution.id));
+        const nextItem = allItems.find(
+          (item) => !newRevealed.has(item.id) && !activeIds.has(item.id)
         );
-
-        if (availableUnrevealed.length > 0) {
-          const nextItem = availableUnrevealed[0];
-          return [...remaining, createBalloonObj(nextItem, balloon.laneIndex, 0)];
-        }
-        return remaining;
+        return nextItem
+          ? [...remaining, createBalloonObj(nextItem, balloon.laneIndex, 0)]
+          : remaining;
       });
     }, 220);
   };
@@ -383,7 +455,7 @@ export default function SurprisePage() {
     setSelectedContribution(null);
     const allItems = getTextContributions();
     if (allItems.length > 0 && revealedIds.size >= allItems.length) {
-      setStage('countdown');
+      transitionToStage('countdown', null);
     }
   };
 
@@ -397,14 +469,34 @@ export default function SurprisePage() {
     setCurrentPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
   };
 
+  const handleNextPhoto = () => {
+    const photos = getPhotoContributions();
+    if (currentPhotoIndex < photos.length - 1) {
+      setCurrentPhotoIndex((prev) => prev + 1);
+    } else {
+      setCurrentAudioIndex(0);
+      transitionToStage('audio_gallery');
+    }
+  };
+
+  const handleNextAudio = () => {
+    const audios = getAudioContributions();
+    if (currentAudioIndex < audios.length - 1) {
+      setCurrentAudioIndex((prev) => prev + 1);
+      setIsPlaying(false);
+    } else {
+      setCurrentAudioIndex(0);
+      setGiftViewState('grid');
+      setSelectedGiftIndex(null);
+      transitionToStage('gifts_grid');
+    }
+  };
+
   const handlePlay = () => setIsPlaying(true);
   const handlePause = () => setIsPlaying(false);
   const handleEnded = () => {
     setIsPlaying(false);
-    const audios = getAudioContributions();
-    if (currentAudioIndex < audios.length - 1) {
-      setCurrentAudioIndex(prev => prev + 1);
-    }
+    handleNextAudio();
   };
 
   const handleOpenGiftBox = (index) => {
@@ -422,12 +514,24 @@ export default function SurprisePage() {
 
   const handleNextGift = () => {
     if (selectedGiftIndex !== null && selectedGiftIndex < giftsList.length - 1) {
-      const nextIdx = selectedGiftIndex + 1;
-      setSelectedGiftIndex(nextIdx);
-      setOpenedGifts(prev => new Set([...prev, nextIdx]));
+      const nextIndex = selectedGiftIndex + 1;
+      setSelectedGiftIndex(nextIndex);
+      setOpenedGifts(prev => new Set([...prev, nextIndex]));
       setGiftViewState('video_player');
     } else {
-      setStage('letter');
+      setGiftViewState('grid');
+      setSelectedGiftIndex(null);
+      setCurrentLetterIdx(0);
+      transitionToStage('letter');
+    }
+  };
+
+  const handleStartGifts = () => {
+    if (giftsList.length > 0) {
+      handleOpenGiftBox(0);
+    } else {
+      setCurrentLetterIdx(0);
+      transitionToStage('letter');
     }
   };
 
@@ -441,17 +545,69 @@ export default function SurprisePage() {
     setIsLetterOpened(true);
   };
 
-  const handleNextLetter = () => {
+const handleNextLetter = () => {
+  playPopSound();
+  if (currentLetterIdx < lettersList.length - 1) {
+    setCurrentLetterIdx((prev) => prev + 1);
+    setIsLetterOpened(false);        // envelope thirumba close aagum
+    setDisplayedLetterText('');      // pazhaya text clear aagum
+  } else {
+    transitionToStage('celebration');
+  }
+};
+
+  const handleCutCake = () => {
+    if (cakeCut) return;
+    setCakeCut(true);
     playPopSound();
-    if (currentLetterIdx < lettersList.length - 1) {
-      setCurrentLetterIdx(prev => prev + 1);
-    } else {
-      setStage('celebration');
-    }
+    confetti({
+      particleCount: 180,
+      spread: 110,
+      startVelocity: 48,
+      origin: { x: 0.5, y: 0.58 },
+      colors: ['#f6c56f', '#fff0ce', '#f090a9', '#c5a4f4', '#ffffff']
+    });
+    window.setTimeout(() => confetti({
+      particleCount: 90,
+      spread: 150,
+      startVelocity: 32,
+      origin: { x: 0.5, y: 0.65 },
+      colors: ['#f6c56f', '#f090a9', '#c5a4f4', '#ffffff']
+    }), 450);
+  };
+
+  const handleReplay = () => {
+    setRevealedIds(new Set());
+    setBalloons([]);
+    setSelectedContribution(null);
+    setTeaserIndex(0);
+    setCakeCut(false);
+    setCurrentLetterIdx(0);
+    setIsLetterOpened(false);
+    setStage('teaser');
   };
 
   if (loading) {
     return <div className="intro-container"><h2 style={{ color: '#c084fc' }}>🎁 Fetching Surprise...</h2></div>;
+  }
+
+  if (segmentIntro) {
+    return (
+      <div className="surprise-app-wrapper segment-intro-screen" role="status" aria-live="polite">
+        {renderBackgroundMusicToggle()}
+        <div className="segment-intro-grain" />
+        <div className="segment-intro-orbit segment-intro-orbit-outer" />
+        <div className="segment-intro-orbit segment-intro-orbit-inner" />
+        <div className="segment-intro-content">
+          <span className="segment-intro-eyebrow">{segmentIntro.eyebrow}</span>
+          <span className="segment-intro-icon" aria-hidden="true">{segmentIntro.icon}</span>
+          <p className="segment-intro-kicker">NEXT SURPRISE FOR YOU</p>
+          <h1 className="segment-intro-title">{segmentIntro.title}</h1>
+          <p className="segment-intro-subtitle">{segmentIntro.subtitle}</p>
+          <span className="segment-intro-rule" />
+        </div>
+      </div>
+    );
   }
 
   // 1️⃣ Lock Stage
@@ -467,7 +623,7 @@ export default function SurprisePage() {
               placeholder="Enter Password" 
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
-              style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #334155', background: '#090d16', color: '#fff', textAlign: 'center', marginBottom: '15px' }}
+              style={{ width: '93%', padding: '14px', borderRadius: '12px', border: '1px solid #334155', background: '#090d16', color: '#fff', textAlign: 'center', marginBottom: '15px' }}
               required
             />
             {authError && <p style={{ color: '#ef4444' }}>{authError}</p>}
@@ -482,6 +638,7 @@ export default function SurprisePage() {
   if (stage === 'teaser') {
     return (
       <div className="surprise-app-wrapper intro-container">
+        {renderBackgroundMusicToggle()}
         <h1 key={teaserIndex} className="glow-teaser-text">{TEASER_STEPS[teaserIndex]}</h1>
       </div>
     );
@@ -491,6 +648,7 @@ export default function SurprisePage() {
   if (stage === 'sky') {
     return (
       <div className="surprise-app-wrapper sky-realm">
+        {renderBackgroundMusicToggle()}
         <div className="sky-header">
           <h1 className="sky-title">🎈 Pop balloons to reveal text wishes!</h1>
         </div>
@@ -510,7 +668,9 @@ export default function SurprisePage() {
         ) : (
           <div className="intro-container">
             <h3>🎉 All Balloons Popped!</h3>
-            <button className="queue-btn" onClick={() => setStage('countdown')}>Proceed to Photos 📸</button>
+            <button className="queue-btn" onClick={() => transitionToStage('countdown', null)}>
+              Proceed to Photos 📸
+            </button>
           </div>
         )}
 
@@ -531,6 +691,7 @@ export default function SurprisePage() {
   if (stage === 'countdown') {
     return (
       <div className="surprise-app-wrapper cinematic-countdown-wrapper">
+        {renderBackgroundMusicToggle()}
         <div className="cinematic-ring"></div>
         <div className="cinematic-ring outer"></div>
         <p className="cinematic-subtext">Get Ready For Memories</p>
@@ -548,11 +709,11 @@ export default function SurprisePage() {
   if (stage === 'photo_gallery') {
     const photos = getPhotoContributions();
     const currentPhoto = photos[currentPhotoIndex] || photos[0];
-    const frameStyle = FRAME_CLASSES[currentPhotoIndex % FRAME_CLASSES.length];
     const rawUrl = currentPhoto?.media_url ? getMediaUrl(currentPhoto.media_url) : '';
 
     return (
       <div className="surprise-app-wrapper slideshow-realm">
+        {renderBackgroundMusicToggle()}
         <div className="gallery-header-section" style={{ marginBottom: '10px' }}>
           <span className="gallery-badge">📸 Memory Gallery</span>
           <h1 className="gallery-main-title">Unforgettable Moments ✨</h1>
@@ -562,51 +723,55 @@ export default function SurprisePage() {
         </div>
 
         <div className="slideshow-stage">
-          <button className="nav-arrow-btn" onClick={prevPhoto} aria-label="Previous Photo">❮</button>
-
           <div className="slideshow-card-container">
-            <div 
+            <button
               key={currentPhoto.id || currentPhotoIndex}
-              className={`single-photo-card ${frameStyle}`}
+              type="button"
+              className="photo-cinema-card"
               onClick={() => setActiveLightbox(true)}
+              aria-label={`Open memory: ${currentPhoto.caption || 'Birthday memory'}`}
             >
-              <div className="photo-img-wrapper">
-                <img 
-                  className="slideshow-photo-img" 
-                  src={rawUrl} 
-                  alt={currentPhoto.caption || "Memory"} 
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = DEMO_PHOTOS[0].media_url;
-                  }}
-                />
-              </div>
-              <div className="photo-caption-text">{currentPhoto.caption || "Sweet Memory Together"}</div>
-              <div className="photo-author-tag">— {getUserName(currentPhoto)}</div>
-            </div>
+              <img
+                className="slideshow-photo-img"
+                src={rawUrl}
+                alt={currentPhoto.caption || 'Birthday memory'}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = DEMO_PHOTOS[0].media_url;
+                }}
+              />
+              <span className="photo-open-hint">View memory <span aria-hidden="true">↗</span></span>
+            </button>
           </div>
-
-          <button className="nav-arrow-btn" onClick={nextPhoto} aria-label="Next Photo">❯</button>
         </div>
 
         <div>
           <div className="slideshow-dots-bar">
-            {photos.map((_, idx) => (
-              <div 
-                key={idx} 
-                className={`slide-dot ${idx === currentPhotoIndex ? 'active' : ''}`}
-                onClick={() => setCurrentPhotoIndex(idx)}
-              />
-            ))}
+            <span className="photo-counter-badge">
+              Memory {currentPhotoIndex + 1} of {photos.length}
+            </span>
           </div>
 
-          <div className="gallery-nav-bar" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <button className="queue-btn" style={{ background: 'rgba(255,255,255,0.12)' }} onClick={() => setShowWishesModal(true)}>
-              📜 Read All Wishes
-            </button>
-            <button className="queue-btn" onClick={() => setStage('audio_gallery')}>
-              Next: Audio Messages 🎙️
-            </button>
+          <div className="photo-story-footer">
+            <div className="photo-story-caption">
+              <span className="photo-story-overline">A MOMENT TO KEEP</span>
+              <h2>{currentPhoto.caption || 'Sweet memory together'}</h2>
+              <p>Captured with love by <strong>{getUserName(currentPhoto)}</strong></p>
+            </div>
+            <div className="gallery-nav-bar">
+              <button className="queue-btn secondary-queue-btn" onClick={() => setShowWishesModal(true)}>
+                Read all wishes
+              </button>
+              {currentPhotoIndex > 0 && (
+                <button className="queue-btn secondary-queue-btn" onClick={prevPhoto}>
+                  Previous photo
+                </button>
+              )}
+              <button className="queue-btn" onClick={handleNextPhoto}>
+                {currentPhotoIndex < photos.length - 1 ? 'Next photo' : 'Next: voice messages'}
+                <span aria-hidden="true"> →</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -627,9 +792,8 @@ export default function SurprisePage() {
                 <p className="lightbox-caption">"{currentPhoto.caption || 'Sweet Memory'}"</p>
                 <span className="lightbox-author">— {getUserName(currentPhoto)}</span>
               </div>
-
-              <button className="lightbox-nav-btn prev" onClick={prevPhoto}>❮</button>
-              <button className="lightbox-nav-btn next" onClick={nextPhoto}>❯</button>
+              <button className="lightbox-nav-btn prev" onClick={prevPhoto} aria-label="Previous photo">❮</button>
+              <button className="lightbox-nav-btn next" onClick={nextPhoto} aria-label="Next photo">❯</button>
             </div>
           </div>
         )}
@@ -661,6 +825,7 @@ export default function SurprisePage() {
 
     return (
       <div className="surprise-app-wrapper audio-realm">
+        {renderBackgroundMusicToggle()}
         <div className="gallery-header-section">
           <span className="gallery-badge">🎙️ Voice Messages</span>
           <h1 className="gallery-main-title">Teddy Has Something To Say! ✨</h1>
@@ -703,24 +868,14 @@ export default function SurprisePage() {
             <p style={{ color: '#94a3b8', margin: '15px 0' }}>No audio files uploaded yet!</p>
           )}
 
-          {audioList.length > 0 && (
-            <div className="slideshow-dots-bar" style={{ marginTop: '15px' }}>
-              {audioList.map((_, idx) => (
-                <div 
-                  key={idx} 
-                  className={`slide-dot ${idx === currentAudioIndex ? 'active' : ''}`}
-                  onClick={() => {
-                    setCurrentAudioIndex(idx);
-                    setIsPlaying(false);
-                  }}
-                />
-              ))}
-            </div>
-          )}
+          <p className="audio-queue-progress">
+            Message {currentAudioIndex + 1} of {audioList.length}
+          </p>
         </div>
 
-        <button className="queue-btn" onClick={() => setStage('gifts_grid')}>
-          Open Secret Gift Boxes 🎁✨
+        <button className="queue-btn" onClick={handleNextAudio}>
+          {currentAudioIndex < audioList.length - 1 ? 'Next voice message' : 'Next: video surprises'}
+          <span aria-hidden="true"> →</span>
         </button>
       </div>
     );
@@ -731,9 +886,10 @@ export default function SurprisePage() {
     const activeGift = selectedGiftIndex !== null ? giftsList[selectedGiftIndex] : null;
 
     return (
-      <div className="surprise-app-wrapper sky-realm" style={{ padding: '20px' }}>
+      <div className="surprise-app-wrapper gift-stage">
+        {renderBackgroundMusicToggle()}
         {giftViewState === 'grid' && (
-          <div style={{ textAlign: 'center', maxWidth: '800px', margin: '0 auto' }}>
+          <div className="gift-collection" style={{ textAlign: 'center', maxWidth: '800px', margin: '0 auto' }}>
             <h1 className="gallery-main-title" style={{ marginBottom: '10px' }}>
               🎁 Tap a Gift Box to Watch Video Surprise! ✨
             </h1>
@@ -741,7 +897,7 @@ export default function SurprisePage() {
               Click any gift box to directly play its video message!
             </p>
 
-            <div style={{
+            <div className="gift-grid" style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
               gap: '20px',
@@ -753,6 +909,7 @@ export default function SurprisePage() {
                 return (
                   <div
                     key={gift.id}
+                    className="gift-card"
                     onClick={() => handleOpenGiftBox(index)}
                     style={{
                       background: isOpened ? 'rgba(30, 41, 59, 0.8)' : 'rgba(15, 23, 42, 0.9)',
@@ -796,19 +953,15 @@ export default function SurprisePage() {
               })}
             </div>
 
-            <button 
-              className="queue-btn" 
-              style={{ marginTop: '35px' }} 
-              onClick={() => setStage('letter')}
-            >
-              Open Special Gift Letters 💌
+            <button className="queue-btn" style={{ marginTop: '35px' }} onClick={handleStartGifts}>
+              {giftsList.length > 0 ? 'Start video surprises ✨' : 'Continue to letters ✨'}
             </button>
           </div>
         )}
 
         {giftViewState === 'video_player' && activeGift && (
-          <div className="surprise-app-wrapper intro-container">
-            <div style={{ width: '100%', maxWidth: '520px', margin: '0 auto', textAlign: 'center' }}>
+          <div className="surprise-app-wrapper video-surprise-screen">
+            <div className="video-surprise-content">
               <span className="gallery-badge">🎬 {activeGift.title} Video Surprise</span>
               
               <h2 style={{ margin: '10px 0', color: '#fff' }}>
@@ -822,33 +975,18 @@ export default function SurprisePage() {
                   controls
                   autoPlay
                   onEnded={handleNextGift}
-                  style={{
-                    width: '100%',
-                    maxHeight: '380px',
-                    borderRadius: '20px',
-                    boxShadow: '0 12px 35px rgba(168, 85, 247, 0.5)',
-                    border: '2px solid #ec4899',
-                    margin: '15px 0'
-                  }}
+                  className="birthday-video-player"
                 />
               ) : (
-                <div style={{ padding: '40px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '20px', margin: '15px 0' }}>
-                  <p style={{ color: '#cbd5e1' }}>🎥 No Video Attached for this Gift Box!</p>
-                  <p style={{ fontStyle: 'italic', color: '#a855f7', marginTop: '10px' }}>
+                <div className="video-message-placeholder">
+                  <p>🎥 No Video Attached for this Gift Box!</p>
+                  <p>
                     "{activeGift.textMessage}"
                   </p>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '15px' }}>
-                <button 
-                  className="queue-btn" 
-                  style={{ background: 'rgba(255,255,255,0.15)' }}
-                  onClick={() => setGiftViewState('grid')}
-                >
-                  🏠 All Gift Boxes
-                </button>
-
+              <div className="video-surprise-actions">
                 <button className="queue-btn" onClick={handleNextGift}>
                   {selectedGiftIndex < giftsList.length - 1 ? 'Next Gift Video 🎬 ❯' : 'Open Special Letters 💌 ❯'}
                 </button>
@@ -866,122 +1004,146 @@ export default function SurprisePage() {
     const letterSender = getUserName(activeLetter);
 
     return (
-      <div className="surprise-app-wrapper intro-container" style={{ padding: '20px' }}>
-        {!isLetterOpened ? (
-          /* CLOSED ENVELOPE STAGE */
-          <div style={{ textAlign: 'center' }}>
-            <h1 className="gallery-main-title" style={{ marginBottom: '15px' }}>
-              💌 Special Birthday Letters
-            </h1>
-            <p style={{ color: '#cbd5e1', marginBottom: '35px' }}>
-              Tap the envelope to open and read secret letters ✨
-            </p>
+      <div className="surprise-app-wrapper secret-post-realm">
+        {renderBackgroundMusicToggle()}
+        <section className="secret-post-content">
+          <span className="secret-post-overline">A PRIVATE LITTLE SURPRISE</span>
+          <h1 className="secret-post-title">A letter, sealed with love</h1>
+          <p className="secret-post-intro">
+            {isLetterOpened
+              ? `A heartfelt note from ${letterSender}.`
+              : 'Someone special sent you a secret birthday letter.'}
+          </p>
+          <span className="secret-post-counter">
+            LETTER {currentLetterIdx + 1} <span> / </span> {lettersList.length}
+          </span>
 
-            <div 
+          <div className={`secret-post-stage ${isLetterOpened ? 'is-letter-open' : ''}`}>
+            <button
+              type="button"
+              className="secret-post-envelope"
               onClick={handleOpenLetter}
-              style={{
-                width: '280px',
-                height: '200px',
-                margin: '0 auto',
-                background: 'linear-gradient(135deg, #f43f5e, #ec4899)',
-                borderRadius: '20px',
-                border: '3px solid #fbcfe8',
-                boxShadow: '0 15px 35px rgba(236, 72, 153, 0.4)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease'
-              }}
+              disabled={isLetterOpened}
+              aria-label={`Open secret birthday letter ${currentLetterIdx + 1} from ${letterSender}`}
+              aria-hidden={isLetterOpened}
+              tabIndex={isLetterOpened ? -1 : 0}
             >
-              <div style={{ fontSize: '5rem', filter: 'drop-shadow(0 5px 10px rgba(0,0,0,0.2))' }}>
-                💌
-              </div>
-              <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '5px' }}>
-                Tap to Open ({lettersList.length} Letters)
+              <span className="envelope-letter-teaser">
+                <span>FOR YOUR EYES ONLY</span>
+                <span>One little birthday wish…</span>
               </span>
-            </div>
-          </div>
-        ) : (
-          /* OPENED LETTER STAGE */
-          <div style={{ maxWidth: '580px', width: '100%', margin: '0 auto', textAlign: 'center' }}>
-            
-            <div style={{ marginBottom: '15px' }}>
-              <span className="photo-counter-badge">
-                Letter {currentLetterIdx + 1} of {lettersList.length}
+              <span className="envelope-back" />
+              <span className="envelope-front-left" />
+              <span className="envelope-front-right" />
+              <span className="envelope-front-bottom" />
+              <span className="envelope-flap" />
+              <span className="envelope-postmark">SPECIAL<br />DELIVERY</span>
+              <span className="envelope-address">
+                <span>TO MY FAVORITE PERSON</span>
+                <strong>With love, {letterSender}</strong>
               </span>
-            </div>
+              <span className="envelope-seal" aria-hidden="true">🎂</span>
+              <span className="envelope-tap-prompt">
+                <span className="envelope-tap-icon">✉</span>
+                {isLetterOpened ? 'Opened with love' : 'Tap to break the seal'}
+              </span>
+            </button>
 
-            <div style={{
-              background: '#fef3c7',
-              color: '#451a03',
-              padding: '35px 25px 20px 25px',
-              borderRadius: '20px',
-              border: '2px solid #f59e0b',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
-              textAlign: 'left',
-              minHeight: '280px',
-              fontFamily: '"Georgia", serif',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between'
-            }}>
-              <div>
-                <div style={{ fontSize: '2rem', textAlign: 'center', marginBottom: '15px' }}>📜✨</div>
-                
-                {/* Typewriter Effect Content */}
-                <div style={{ 
-                  fontSize: '1.15rem', 
-                  lineHeight: '1.8', 
-                  whiteSpace: 'pre-line',
-                  borderLeft: '3px solid #f59e0b',
-                  paddingLeft: '15px'
-                }}>
-                  {displayedLetterText}
-                  <span style={{ fontWeight: 'bold', color: '#d97706', animation: 'blink 0.8s infinite' }}>|</span>
+            {isLetterOpened && (
+              <article className="secret-post-paper" key={currentLetterIdx}>
+                <div className="secret-paper-header">
+                  <span className="secret-paper-stamp">A NOTE<br />FOR YOU</span>
+                  <span className="secret-paper-date">A BIRTHDAY POST</span>
                 </div>
-              </div>
-
-              {/* Exact User / Sender Name rendering at Bottom */}
-              <div style={{
-                textAlign: 'right',
-                marginTop: '25px',
-                paddingTop: '15px',
-                borderTop: '1px dashed #d97706',
-                fontStyle: 'italic',
-                fontWeight: 'bold',
-                fontSize: '1.1rem',
-                color: '#78350f'
-              }}>
-                — From: {letterSender} ❤️
-              </div>
-            </div>
-
-            {/* Letter Navigation Buttons */}
-            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '25px' }}>
-              <button 
-                className="queue-btn"
-                onClick={handleNextLetter}
-              >
-                {currentLetterIdx < lettersList.length - 1 ? 'Next Letter 💌 ❯' : 'Finish Celebration 🎉'}
-              </button>
-            </div>
-
+                <div className="secret-paper-body">
+                  <div className="secret-paper-greeting">To someone wonderful,</div>
+                  <div className="secret-paper-message">
+                    {displayedLetterText}
+                    {displayedLetterText.length < (activeLetter?.content || activeLetter?.text || activeLetter?.caption || '').length && (
+                      <span className="secret-paper-caret" aria-hidden="true">|</span>
+                    )}
+                  </div>
+                </div>
+                <div className="secret-paper-signoff">
+                  <span>Sealed with love,</span>
+                  <strong>{letterSender} <span aria-hidden="true">🎂</span></strong>
+                </div>
+              </article>
+            )}
           </div>
-        )}
+
+          {!isLetterOpened ? (
+            <p className="secret-post-hint">Tap the sealed envelope to reveal your message</p>
+          ) : (
+            <button className="secret-post-next" onClick={handleNextLetter}>
+              {currentLetterIdx < lettersList.length - 1 ? 'Next letter' : 'Finish celebration'}
+              <span aria-hidden="true"> →</span>
+            </button>
+          )}
+        </section>
       </div>
     );
   }
 
   // 9️⃣ Final Celebration Stage
+  const birthdayName = typeof roomData?.target_name === 'string'
+    ? roomData.target_name.trim()
+    : '';
+
   return (
     <div className="surprise-app-wrapper intro-container">
-      <h1 style={{ fontSize: '3rem', marginBottom: '20px' }}>🎉 Happy Birthday! 🎉</h1>
-      <p style={{ fontSize: '1.2rem', color: '#c084fc', marginBottom: '30px' }}>Hope you enjoyed all the surprises!</p>
-      <button className="queue-btn" onClick={() => setStage('sky')}>
-        Replay Balloon Messages 🎈
-      </button>
+      {renderBackgroundMusicToggle()}
+      <section className={`birthday-finale ${cakeCut ? 'cake-is-cut' : ''}`}>
+        <div className="birthday-finale-glow" />
+        <span className="birthday-finale-overline">THE GRAND FINALE</span>
+        <h1>
+          Happy Birthday{birthdayName ? `, ${birthdayName}` : ''}
+          <span className="finale-period">.</span>
+        </h1>
+        <p className="birthday-finale-copy">
+          {cakeCut
+            ? 'Wish made. Cake shared. Let the celebrating begin!'
+            : 'One last thing… close your eyes, make a wish, and cut your birthday cake.'}
+        </p>
+
+        <div className="birthday-cake-scene" aria-label={cakeCut ? 'Birthday cake has been cut' : 'Birthday cake with lit candles'}>
+          <span className="cake-sparkle cake-sparkle-one">✦</span>
+          <span className="cake-sparkle cake-sparkle-two">✧</span>
+          <div className="cake-candles" aria-hidden="true">
+            {[0, 1, 2].map((candle) => (
+              <span className={`cake-candle candle-${candle + 1}`} key={candle}>
+                <span className="candle-flame" />
+              </span>
+            ))}
+          </div>
+          <div className={`birthday-cake ${cakeCut ? 'birthday-cake-cut' : ''}`} aria-hidden="true">
+            <div className="cake-top">
+              <span className="cake-icing-drip drip-one" />
+              <span className="cake-icing-drip drip-two" />
+              <span className="cake-icing-drip drip-three" />
+              <span className="cake-berry berry-one">●</span>
+              <span className="cake-berry berry-two">●</span>
+              <span className="cake-berry berry-three">●</span>
+            </div>
+            <div className="cake-layer cake-layer-upper"><span>MAKE A WISH</span></div>
+            <div className="cake-layer cake-layer-lower" />
+          </div>
+          <span className="cake-plate" />
+          {cakeCut && <span className="cake-slice" aria-hidden="true" />}
+        </div>
+
+        <div className="birthday-finale-actions">
+          <button className="cake-cut-button" onClick={handleCutCake} disabled={cakeCut}>
+            {cakeCut ? 'Wish granted ✨' : 'Cut the cake'}
+          </button>
+          {cakeCut && (
+            <button className="queue-btn secondary-queue-btn" onClick={handleReplay}>
+              Replay the birthday surprise <span aria-hidden="true">↻</span>
+            </button>
+          )}
+        </div>
+        <p className="birthday-signoff">A whole lot of love, just for you.</p>
+      </section>
     </div>
   );
 }

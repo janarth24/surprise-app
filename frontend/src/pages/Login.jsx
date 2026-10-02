@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import API from '../services/api';
 
 export default function Login({ onSwitch, onLoginSuccess }) {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,11 +35,25 @@ export default function Login({ onSwitch, onLoginSuccess }) {
           </div>
           <div className="form-group">
             <label>Password</label>
-            <input 
-              type="password" 
-              required 
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
-            />
+            <div className="password-input-wrap">
+              <input
+                className="password-input"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              />
+              <button
+                className="password-toggle"
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+              </button>
+            </div>
           </div>
           <button type="submit" className="btn-primary">Login</button>
         </form>

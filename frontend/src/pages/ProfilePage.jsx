@@ -98,7 +98,7 @@ export default function ProfilePage({ currentUser, setCurrentUser }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0b0f12', color: '#fff', padding: '30px 5%' }}>
+    <div className="animated-page-root" style={{ minHeight: '100vh', color: '#fff', padding: '30px 5%' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <button 
